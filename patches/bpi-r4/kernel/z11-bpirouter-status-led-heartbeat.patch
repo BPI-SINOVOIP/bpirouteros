@@ -1,0 +1,30 @@
+status LED: blink (heartbeat) in Linux instead of solid on (R4).
+
+The green status LED (pio79) was solid: default-state="on" + diag led-boot/
+running/upgrade bindings force it on. Heartbeat = alive (like r4-pro /
+openwrt-one / r4-lite). Keep led-failsafe; blue WPS LED untouched. The LEDs
+live in mt7988a-bananapi-bpi-r4.dtsi (added by 189-complete-bpi-r4).
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4.dtsi
+@@ -60,10 +60,8 @@
+ 		ethernet1 = &gmac1;
+ 		ethernet2 = &gmac2;
+ 		serial0 = &serial0;
+-		led-boot = &led_green;
++		/* status LED -> heartbeat (alive); keep only failsafe (was led-running=solid) */
+ 		led-failsafe = &led_green;
+-		led-running = &led_green;
+-		led-upgrade = &led_green;
+ 	};
+ 
+ 	memory@40000000 {
+@@ -100,7 +98,7 @@
+ 			function = LED_FUNCTION_STATUS;
+ 			color = <LED_COLOR_ID_GREEN>;
+ 			gpios = <&pio 79 GPIO_ACTIVE_HIGH>;
+-			default-state = "on";
++			linux,default-trigger = "heartbeat";
+ 		};
+ 
+ 		led_blue: led-blue {

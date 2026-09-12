@@ -1,0 +1,47 @@
+A/B: split the single UBI `fit` volume into `fit-a`/`fit-b` and add
+/chosen rootdisk-spim-nand-a/-b phandles (openwrt-one, mt7981b, Track B).
+
+NAND-only board: A/B lives in UBI, not GPT. The kernel binds the root
+block device by matching a ubiblock's parent (UBI volume) of_node against
+the /chosen/rootdisk phandle (drivers/mtd/ubi/vmt.c find_volume_fwnode
+sets vol->dev of_node from the DT volname; drivers/block fitblk matches it).
+So two volumes fit-a/fit-b each get their own DT node, and u-boot's
+mt7981 ft_system_setup (z03) repoints /chosen/rootdisk to the active slot.
+
+Static `rootdisk` and plain `rootdisk-spim-nand` both default to fit-a so an
+un-patched u-boot / unset active_slot still boots slot A, matching z03's
+fallback. volname uses hyphens (fit-a/fit-b) per existing DTS convention.
+
+Two separate hunks (the /chosen and volumes nodes are ~300 lines apart);
+applied via `git apply` whose --check fails loudly, so no silent-drop risk.
+
+diff --git a/target/linux/mediatek/dts/mt7981b-openwrt-one.dts b/target/linux/mediatek/dts/mt7981b-openwrt-one.dts
+index 173054b..d81477f 100644
+--- a/target/linux/mediatek/dts/mt7981b-openwrt-one.dts
++++ b/target/linux/mediatek/dts/mt7981b-openwrt-one.dts
+@@ -19,7 +19,10 @@
+ 
+ 	chosen {
+ 		stdout-path = "serial0:115200n8";
+-		rootdisk = <&ubi_fit_volume>;
++		rootdisk = <&ubi_fit_a>;
++		rootdisk-spim-nand = <&ubi_fit_a>;
++		rootdisk-spim-nand-a = <&ubi_fit_a>;
++		rootdisk-spim-nand-b = <&ubi_fit_b>;
+ 	};
+ 
+ 	memory@40000000 {
+@@ -331,8 +334,11 @@
+ 				compatible = "linux,ubi";
+ 
+ 				volumes {
+-					ubi_fit_volume: ubi-volume-fit {
+-						volname = "fit";
++					ubi_fit_a: ubi-volume-fit-a {
++						volname = "fit-a";
++					};
++					ubi_fit_b: ubi-volume-fit-b {
++						volname = "fit-b";
+ 					};
+ 				};
+ 			};

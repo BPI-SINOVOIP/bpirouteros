@@ -1,0 +1,271 @@
+Prepare the AS21xxx PHYs after rootfs mount, then load the MxL switch once.
+
+Both R4-Pro AS21xxx PHYs require firmware from the root filesystem.  The
+kernel sees freshly reset devices before rootfs mount and may bind the generic
+Clause 45 driver.  The service replaces only that early PHY binding after the
+firmware becomes readable.  The MxL862xx DSA driver is packaged without an
+autoload entry and is loaded exactly once after bounded PHY preparation.  The
+four internal-PHY ports remain the minimum usable topology: missing firmware
+or either optional external PHY may disable a 10G path, but must not suppress
+the independent four-port baseline.
+
+Manual start/restart remains diagnostic-only.  START=19 keeps the boot-only
+PHY preparation and first switch probe ahead of netifd (START=20).
+
+diff --git a/target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw b/target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw
+new file mode 100755
+index 0000000..46ddf58
+--- /dev/null
++++ b/target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw
+@@ -0,0 +1,236 @@
++#!/bin/sh /etc/rc.common
++# Attempt AS21xxx PHY preparation once rootfs is mounted, then load the MxL862xx
++# switch driver exactly once. Runtime service actions are read-only.
++START=19
++
++PHYS="mdio-bus:1c mdio-bus:18"
++SYSFS_ROOT="${BPIR_AS21XXX_SYSFS_ROOT:-/sys}"
++MODEL_FILE="${BPIR_AS21XXX_MODEL_FILE:-/proc/device-tree/model}"
++FW="${BPIR_AS21XXX_FW:-/lib/firmware/as21x1x_fw.bin}"
++MDIO_BUS="$SYSFS_ROOT/bus/mdio_bus"
++NET_ROOT="$SYSFS_ROOT/class/net"
++MXL_DEVICE=mdio-bus:10
++MXL_MODULE=mxl862xx_dsa
++# Integer seconds only: the target busybox is built without FEATURE_FLOAT_SLEEP,
++# so `sleep 0.2` fails with "invalid number" and the loop below would spin
++# without ever waiting. Measured on hardware 2026-09-04: both phases normally
++# need zero ticks, because drivers_probe and modprobe are both synchronous --
++# the module's own init completes the switch probe before modprobe returns.
++# The budget is therefore insurance against a future deferred probe, not a
++# figure the normal path spends. Worst case adds 3 x 10s before netifd starts.
++WAIT_STEPS=10
++WAIT_INTERVAL=1
++
++# The first deployment invokes boot() from uci-defaults before logd is
++# guaranteed to be available. Keep the same message in the kernel log.
++say() {
++	logger -t as21xxx-fw "$1"
++	echo "as21xxx-fw: $1" > /dev/kmsg 2>/dev/null
++}
++
++control_write() {
++	printf '%s\n' "$1" > "$2"
++}
++
++wait_tick() {
++	sleep "$WAIT_INTERVAL"
++}
++
++load_mxl_driver() {
++	/sbin/modprobe "$MXL_MODULE"
++}
++
++is_as21xxx_driver() {
++	case "$1" in
++		# This is the driver's generic firmware loader, not a completed
++		# model binding and therefore not ready for the switch probe.
++		Aeonsemi\ AS21xxx) return 1 ;;
++		Aeonsemi\ AS21*) return 0 ;;
++	esac
++	return 1
++}
++
++mxl_base_ports_ready() {
++	for port in 0 1 2 3; do
++		[ -e "$NET_ROOT/mxl_lan$port" ] || return 1
++	done
++	return 0
++}
++
++# The combo port's netdev exists as soon as DSA attaches ANY phy to port13,
++# including the generic pre-firmware identity. That is not a working port: the
++# switch is loaded once and never re-probed, so a port13 bound to Generic
++# Clause 45 PHY stays dead for this boot. Measured 2026-09-04: it never links,
++# and reporting it "ready" is how a dead management port gets logged as up.
++lan_combo_phy_ready() {
++	is_as21xxx_driver "$(bound_driver "$MDIO_BUS/devices/mdio-bus:18")"
++}
++
++mxl_all_ports_ready() {
++	mxl_base_ports_ready || return 1
++	[ -e "$NET_ROOT/mxl_lan4" ] || return 1
++	lan_combo_phy_ready
++}
++
++mxl_bound() {
++	[ -e "$MDIO_BUS/devices/$MXL_DEVICE/driver" ] || return 1
++	[ "$(basename "$(readlink "$MDIO_BUS/devices/$MXL_DEVICE/driver")")" = "mxl862xx" ]
++}
++
++bound_driver() {
++	_wait_device=$1
++	_wait_driver=""
++	[ -e "$_wait_device/driver" ] &&
++		_wait_driver="$(basename "$(readlink "$_wait_device/driver")")"
++	printf '%s\n' "$_wait_driver"
++}
++
++wait_for_as21xxx() {
++	_wait_device=$1
++	_wait_left=$WAIT_STEPS
++	while :; do
++		_wait_driver="$(bound_driver "$_wait_device")"
++		is_as21xxx_driver "$_wait_driver" && return 0
++		[ "$_wait_left" -gt 0 ] || return 1
++		_wait_left=$((_wait_left - 1))
++		wait_tick
++	done
++}
++
++# Wait for the complete topology, then distinguish a safe four-port degraded
++# result from total switch-probe failure. Return 0=all, 1=base only, 2=no base.
++wait_for_mxl_topology() {
++	_wait_left=$WAIT_STEPS
++	while :; do
++		mxl_all_ports_ready && return 0
++		# A combo PHY that never reached its firmware-backed driver cannot
++		# produce a working fifth port in this boot, so four ports is the
++		# complete achievable topology; waiting longer only delays netifd.
++		if mxl_base_ports_ready && ! lan_combo_phy_ready; then
++			return 1
++		fi
++		[ "$_wait_left" -gt 0 ] || break
++		_wait_left=$((_wait_left - 1))
++		wait_tick
++	done
++	mxl_base_ports_ready && return 1
++	return 2
++}
++
++diagnose() {
++	[ "$(tr -d '\000' < "$MODEL_FILE")" = "Banana Pi BPI-R4 Pro 8X" ] || return 0
++
++	result=0
++	[ -f "$FW" ] || {
++		say "$FW missing; the 10G ports will not come up"
++		result=1
++	}
++	for phy in $PHYS; do
++		device="$MDIO_BUS/devices/$phy"
++		[ -e "$device" ] || {
++			say "$phy is missing from the MDIO bus"
++			result=1
++			continue
++		}
++		driver=""
++		[ -e "$device/driver" ] && driver="$(basename "$(readlink "$device/driver")")"
++		is_as21xxx_driver "$driver" || {
++			say "$phy is bound to ${driver:-nothing}, not a completed AS21xxx model driver"
++			result=1
++		}
++	done
++	mxl_bound || {
++		say "$MXL_DEVICE is not bound to mxl862xx"
++		result=1
++	}
++	mxl_all_ports_ready || {
++		say "mxl_lan0..4 are not all available"
++		result=1
++	}
++	return "$result"
++}
++
++# Runtime invocation is deliberately diagnostic-only. Physical driver
++# ownership must never be changed because netifd or an interface is absent.
++start() {
++	diagnose
++}
++
++boot() {
++	[ "$(tr -d '\000' < "$MODEL_FILE")" = "Banana Pi BPI-R4 Pro 8X" ] || return 0
++
++	result=0
++	firmware_ready=1
++	[ -f "$FW" ] || {
++		say "$FW missing; the 10G ports will not come up"
++		result=1
++		firmware_ready=0
++	}
++
++	for phy in $PHYS; do
++		device="$MDIO_BUS/devices/$phy"
++		[ -e "$device" ] || {
++			say "$phy is missing from the MDIO bus"
++			result=1
++			continue
++		}
++
++		driver="$(bound_driver "$device")"
++		if ! is_as21xxx_driver "$driver" && [ "$firmware_ready" -eq 1 ]; then
++			if [ -n "$driver" ]; then
++				say "$phy releasing early $driver binding"
++				control_write "$phy" "$device/driver/unbind" || {
++					say "failed to release $phy from $driver"
++					result=1
++					continue
++				}
++			fi
++			control_write "$phy" "$MDIO_BUS/drivers_probe" 2>/dev/null || true
++			wait_for_as21xxx "$device" || true
++			driver="$(bound_driver "$device")"
++		fi
++
++		if is_as21xxx_driver "$driver"; then
++			say "$phy ready as $driver"
++		else
++			say "$phy did not bind to a completed AS21xxx model driver"
++			result=1
++		fi
++	done
++
++	# A pre-bound switch is never detached here. Preserve whatever ports it
++	# already supplied. A bounded wait accommodates deferred DSA registration.
++	if mxl_bound; then
++		if wait_for_mxl_topology; then topology=0; else topology=$?; fi
++		case "$topology" in
++			0) return "$result" ;;
++			1) say "$MXL_DEVICE is bound with only mxl_lan0..3; preserving the base ports" ;;
++			*) say "$MXL_DEVICE is bound but did not create the base LAN ports" ;;
++		esac
++		return 1
++	fi
++
++	load_mxl_driver || {
++		say "failed to load $MXL_MODULE; the MxL LAN ports are unavailable"
++		return 1
++	}
++	if wait_for_mxl_topology; then topology=0; else topology=$?; fi
++	case "$topology" in
++		0)
++			say "mxl_lan0..4 are ready after the first switch probe"
++			return "$result"
++			;;
++		1)
++			if lan_combo_phy_ready; then
++				say "mxl_lan0..3 are ready but mxl_lan4 is unavailable; preserving the base ports"
++			else
++				say "mxl_lan0..3 are ready; mxl_lan4 has no firmware-backed PHY and its 10G LAN path is dead this boot"
++			fi
++			return 1
++			;;
++		*)
++			say "the first MxL switch probe did not create the base LAN ports"
++			return 1
++			;;
++	esac
++}
+diff --git a/target/linux/mediatek/filogic/base-files/etc/uci-defaults/99-bpirouter-as21xxx-fw b/target/linux/mediatek/filogic/base-files/etc/uci-defaults/99-bpirouter-as21xxx-fw
+new file mode 100755
+index 0000000..50ea81c
+--- /dev/null
++++ b/target/linux/mediatek/filogic/base-files/etc/uci-defaults/99-bpirouter-as21xxx-fw
+@@ -0,0 +1,9 @@
++#!/bin/sh
++# Enable the PHY preparation service and run it once on first deployment.
++#
++# rcS globs /etc/rc.d once when it starts, so the symlink this creates is not
++# picked up until the next boot. The explicit boot action supplies the same
++# ordering on the first boot without making runtime start destructive.
++/etc/init.d/bpirouter-as21xxx-fw enable
++/etc/init.d/bpirouter-as21xxx-fw boot
++exit 0

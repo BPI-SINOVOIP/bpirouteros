@@ -1,0 +1,10 @@
+--- a/cmd/Kconfig
++++ b/cmd/Kconfig
+@@ -765,6 +765,7 @@ config CMD_NVEDIT_INFO
+ 
+ config CMD_NVEDIT_LOAD
+ 	bool "env load"
++	default y
+ 	help
+ 	  Load all environment variables from the compiled-in persistent
+ 	  storage.

@@ -1,0 +1,81 @@
+BpiRouter UI — Proprietary Licence
+
+Copyright (c) 2026 Ning. All rights reserved.
+Contact: mimallaus@gmail.com
+
+This repository contains the BpiRouter management application: a Go backend
+(bpirouter-apid) and a Vue web interface. It is proprietary software. No licence
+is granted except as stated below or by separate written agreement.
+
+
+1. RELATIONSHIP TO THE FIRMWARE'S FREE SOFTWARE
+
+This application ships inside firmware built on OpenWrt, which contains software
+under the GNU General Public License and other free software licences.
+
+This application is an independent program, not a derivative of them:
+
+  - the backend is built with CGO_ENABLED=0 and links no C library;
+  - its only dependencies are golang-jwt/jwt (MIT) and tredoe/osutil (MPL-2.0);
+  - it interacts with the system by executing separate programs (uci, ubus and
+    other command-line tools), never by linking into them or being loaded into
+    their address space.
+
+It is therefore an aggregate alongside the GPL-covered components rather than a
+work derived from them, and this licence does not extend to any of them. The
+corresponding source for those components is provided as described in
+the README supplied with this source.
+
+Nothing in this licence restricts, or is capable of restricting, what a
+recipient may do with the GPL-covered parts of the firmware.
+
+
+2. WHAT THIS LICENCE DOES NOT COVER
+
+  - the OpenWrt sources, feeds and package recipes;
+  - the patches to Linux, U-Boot, ARM Trusted Firmware and OpenWrt in
+    bpirouter-build/patches/;
+  - the build and installation scripts and board configuration in
+    bpirouter-build/;
+  - the firmware images themselves, to the extent they contain the above.
+
+Each of those carries its own licence. See the LICENSING.md files in
+bpirouter-build and bpirouter-feeds.
+
+
+3. PERMITTED USE
+
+Permission is granted, free of charge, to use this application as delivered in
+BpiRouter firmware, for any purpose including commercial operation of the device
+it is installed on.
+
+Without prior written authorisation you may not redistribute it as part of
+another product, sublicense it, sell it, or reverse-engineer it to produce a
+white-labelled or derivative product.
+
+
+4. TRADEMARKS
+
+The BpiRouter name, logo and brand identifiers are not licensed here. Reserving
+them creates no conflict with any free software licence, since copyright
+licences do not grant trademark rights.
+
+
+5. THIRD-PARTY COMPONENTS
+
+See THIRD_PARTY_NOTICES.md.
+
+
+6. OEM AND COMMERCIAL LICENSING
+
+For redistribution rights, white-labelling, or access to source, contact the
+copyright holder.
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

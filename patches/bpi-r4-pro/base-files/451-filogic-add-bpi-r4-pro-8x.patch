@@ -1,0 +1,34 @@
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -720,6 +720,31 @@
+ endef
+ TARGET_DEVICES += bananapi_bpi-r4-poe
+ 
++define Device/bananapi_bpi-r4-pro-8x
++  DEVICE_MODEL := BPi-R4 Pro 8X
++  DEVICE_DTS := mt7988a-bananapi-bpi-r4-pro-8x
++  DEVICE_DTS_CONFIG := config-mt7988a-bananapi-bpi-r4-pro-8x
++  $(call Device/bananapi_bpi-r4-common)
++  DEVICE_DTS_OVERLAY := mt7988a-bananapi-bpi-r4-pro-8x-emmc mt7988a-bananapi-bpi-r4-pro-8x-sd
++  # r4-pro is DDR4 8GB (8X): use the DDR4_4BG_MODE BL2 so DRAM is sized as 8GB
++  # (the shared *-comb BL2 caps at 4GB). BL31/u-boot FIP and the GPT are unchanged.
++  ARTIFACT/emmc-preloader.bin	:= mt7988-bl2 emmc-comb-4bg
++  ARTIFACT/snand-preloader.bin	:= mt7988-bl2 spim-nand-ubi-comb-4bg
++  ARTIFACT/sdcard.img.gz	:= bpir-gpt sdmmc |\
++				   pad-to 17k | mt7988-bl2 sdmmc-comb-4bg |\
++				   pad-to 6656k | mt7988-bl31-uboot $$(DEVICE_NAME)-sdmmc |\
++				   pad-to 12M | mt7988-bl2 spim-nand-ubi-comb-4bg |\
++				   pad-to 13M | mt7988-bl31-uboot $$(DEVICE_NAME)-snand |\
++				   pad-to 19M | mt7988-bl2 emmc-comb-4bg |\
++				   pad-to 20M | mt7988-bl31-uboot $$(DEVICE_NAME)-emmc |\
++				   pad-to 24M | bpir-gpt emmc |\
++				$(if $(CONFIG_TARGET_ROOTFS_SQUASHFS),\
++				   pad-to 32M | append-image squashfs-sysupgrade.itb | check-size |\
++				) \
++				  gzip
++endef
++TARGET_DEVICES += bananapi_bpi-r4-pro-8x
++
+ define Device/bananapi_bpi-r4-lite
+   DEVICE_VENDOR := Bananapi
+   DEVICE_MODEL := BPi-R4 Lite

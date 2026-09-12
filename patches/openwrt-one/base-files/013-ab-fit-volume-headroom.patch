@@ -1,0 +1,62 @@
+A/B: give the fit-a / fit-b UBI volumes explicit size with headroom.
+
+Both firmware slots were sized by ubinize-image from the length of the very
+image being packed, so each volume came out exactly as large as the golden image
+and no larger. A device provisioned that way can never accept a bigger image:
+the A/B OTA writes with ubiupdatevol, which refuses to overflow the volume.
+
+Found on real hardware (2026-07-30, openwrt-one, TEST-ACCEPTANCE §9): the
+telemetry build grew the image by ~218 KB and the OTA stopped working —
+
+  ubiupdatevol: error!: ".../bpirouter-firmware-4096799634.itb" (size 28442890)
+                will not fit volume "/dev/ubi0_4" (size 28315648)
+
+— while system.flash_firmware had already answered success, so the box silently
+stayed on the old slot. 27.0 MiB volumes against a 27.1 MiB image is a 0.45%
+margin, i.e. none at all.
+
+Build/ubinize-image now takes an optional third word, the volume size in MiB,
+and passes it through to the --part syntax the script already understands
+(name=image=sizeMiB). Targets that pass two words are unaffected.
+
+fit-a and fit-b are pinned to 32 MiB each: 265 LEBs of the 2040 the 256M part
+exposes, +84 LEBs over the previous pair, leaving ~6 MiB unallocated for wear
+levelling. That is ~4.9 MiB of growth room per slot at today's image size.
+
+--- a/include/image-commands.mk
++++ b/include/image-commands.mk
+@@ -214,7 +214,7 @@ define Build/ubinize-image
+ 	sh $(TOPDIR)/scripts/ubinize-image.sh \
+ 		$(if $(UBOOTENV_IN_UBI),--uboot-env) \
+ 		$(foreach part,$(UBINIZE_PARTS),--part $(part)) \
+-		--part $(word 1,$(1))="$(BIN_DIR)/$(DEVICE_IMG_PREFIX)-$(word 2,$(1))" \
++		--part $(word 1,$(1))="$(BIN_DIR)/$(DEVICE_IMG_PREFIX)-$(word 2,$(1))"$(if $(word 3,$(1)),=$(word 3,$(1))) \
+ 		$@.tmp \
+ 		-p $(BLOCKSIZE:%k=%KiB) -m $(PAGESIZE) \
+ 		$(if $(SUBPAGESIZE),-s $(SUBPAGESIZE)) \
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -2479,12 +2479,12 @@
+   ARTIFACT/snand-preloader.bin		:= mt7981-bl2 spim-nand-ubi-ddr4
+   ARTIFACT/snand-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-snand
+   ARTIFACT/ram-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-ram
+-  ARTIFACT/factory.ubi			:= ubinize-image fit-a squashfs-sysupgrade.itb
++  ARTIFACT/factory.ubi			:= ubinize-image fit-a squashfs-sysupgrade.itb 32
+   ARTIFACT/snand-factory.bin		:= mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 256k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 512k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 768k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 1024k | \
+-					   ubinize-image fit-a squashfs-sysupgrade.itb
++					   ubinize-image fit-a squashfs-sysupgrade.itb 32
+   ARTIFACT/nor-factory.bin		:= mt7981-bl2 nor-ddr4 | pad-to 256k | \
+ 					   append-openwrt-one-eeprom | pad-to 1024k | \
+ 					   mt7981-bl31-uboot openwrt_one-nor | pad-to 512k | \
+@@ -2493,7 +2493,7 @@
+   BLOCKSIZE := 128k
+   PAGESIZE := 2048
+   UBINIZE_PARTS := fip=:$(STAGING_DIR_IMAGE)/mt7981_openwrt_one-snand-u-boot.fip \
+-		   fit-b=$(BIN_DIR)/openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb
++		   fit-b=$(BIN_DIR)/openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb=32
+ endef
+ TARGET_DEVICES += openwrt_one
+ 

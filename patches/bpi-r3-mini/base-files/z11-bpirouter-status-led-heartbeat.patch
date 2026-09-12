@@ -1,0 +1,33 @@
+R3-Mini status LED: blink (heartbeat) in Linux instead of solid on.
+
+The green status LED (pio19) was solid: bound to the diag led-boot/running/
+upgrade aliases with no trigger, so diag.sh forces it on. Give it
+linux,default-trigger = "heartbeat" and keep only led-failsafe, so a steady
+blink = system alive (matches r4-pro / r4-lite / openwrt-one). This is the
+runtime LED only; the u-boot provisioning env keeps its own scheme
+(green-solid = done) unchanged.
+
+--- a/target/linux/mediatek/dts/mt7986a-bananapi-bpi-r3-mini.dts
++++ b/target/linux/mediatek/dts/mt7986a-bananapi-bpi-r3-mini.dts
+@@ -21,10 +21,9 @@
+ 		ethernet1 = &gmac1;
+ 		serial0 = &uart0;
+ 
+-		led-boot = &status_led;
++		/* single system LED -> heartbeat (alive); keep only failsafe.
++		 * was solid via led-running. Mirrors r4-pro/r4-lite. */
+ 		led-failsafe = &status_led;
+-		led-running = &status_led;
+-		led-upgrade = &status_led;
+ 	};
+ 
+ 	chosen {
+@@ -55,6 +54,8 @@
+ 			function = LED_FUNCTION_STATUS;
+ 			color = <LED_COLOR_ID_GREEN>;
+ 			gpios = <&pio 19 GPIO_ACTIVE_HIGH>;
++			/* blink to show the system is alive (was solid via led-running) */
++			linux,default-trigger = "heartbeat";
+ 		};
+ 
+ 		led-1 {

@@ -1,0 +1,32 @@
+diff --git a/package/network/config/netifd/patches/900-bpirouter-refresh-dynamic-ip6assign.patch b/package/network/config/netifd/patches/900-bpirouter-refresh-dynamic-ip6assign.patch
+new file mode 100644
+index 0000000..48182ac
+--- /dev/null
++++ b/package/network/config/netifd/patches/900-bpirouter-refresh-dynamic-ip6assign.patch
+@@ -0,0 +1,26 @@
++diff --git a/interface.c b/interface.c
++index c8771bf..0b8cca1 100644
++--- a/interface.c
+++++ b/interface.c
++@@ -1422,10 +1422,21 @@ interface_update(struct vlist_tree *tree, struct vlist_node *node_new,
++ 		interface_change_config(if_old, if_new);
++ 	} else if (node_old) {
++ 		D(INTERFACE, "Remove interface '%s'", if_old->name);
+++		/*
+++		 * Config updates latch assignment refresh in
+++		 * interface_merge_assignment_data(). Creation and removal do not
+++		 * pass through that path, so latch them here and let config_init_all()
+++		 * refresh once after the vlist flush has completed.
+++		 */
+++		if (if_old->assignment_length >= 48 && if_old->assignment_length <= 64)
+++			interface_refresh_assignments(true);
++ 		set_config_state(if_old, IFC_REMOVE);
++ 	} else if (node_new) {
++ 		D(INTERFACE, "Create interface '%s'", if_new->name);
+++		/* See the removal path above: this only latches the deferred refresh. */
+++		if (if_new->assignment_length >= 48 && if_new->assignment_length <= 64)
+++			interface_refresh_assignments(true);
++ 		interface_event(if_new, IFEV_CREATE);
++ 		proto_init_interface(if_new, if_new->config);
++ 		interface_claim_device(if_new);
++ 		netifd_ubus_add_interface(if_new);

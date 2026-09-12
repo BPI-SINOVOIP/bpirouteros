@@ -1,0 +1,20 @@
+diff --git a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+index 8297e6b..52ad422 100755
+--- a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
++++ b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+@@ -311,7 +311,14 @@ proto_qmi_setup() {
+ 	# establish a non-LTE data session.
+ 	profile_pdptype="$pdptype"
+ 	[ "$profile_pdptype" = "ip" ] && profile_pdptype="ipv4"
+-	uqmi -s -d "$device" -t 1000 --modify-profile "3gpp,1" --apn "$apn" --pdp-type "$profile_pdptype" > /dev/null 2>&1
++	# ${apn:+...}: an EMPTY apn must not reach --modify-profile. Passing it
++	# overwrites profile 1's APN with an empty string, destroying the one the
++	# modem selected from its own database for this SIM -- irreversibly, since
++	# nothing restores it afterwards. Measured: a card whose profile read
++	# "YESINTERNET" before the first dial read "" after it, and a second card
++	# on another carrier then got an IPv6-only bearer and no IPv4 at all.
++	# Line 335 below already guards the same value this way.
++	uqmi -s -d "$device" -t 1000 --modify-profile "3gpp,1" ${apn:+--apn "$apn"} --pdp-type "$profile_pdptype" > /dev/null 2>&1
+ 
+ 	if [ "$pdptype" = "ip" ]; then
+ 		[ -z "$autoconnect" ] && autoconnect=1

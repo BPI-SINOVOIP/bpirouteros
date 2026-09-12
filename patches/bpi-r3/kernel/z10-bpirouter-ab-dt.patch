@@ -1,0 +1,25 @@
+A/B: declare the second eMMC slot partition and rootdisk phandles (mt7986/R3).
+
+Adds a `production_b` GPT partition node and /chosen rootdisk-emmc-a/-b phandles
+(referencing emmc_rootdisk, the label OpenWrt 196 gives R3 block-partition-production)
+so 311+z03 ft_system_setup can point /chosen/rootdisk at the active slot. ONE hunk
+(not two) — a split hunk left the /chosen additions silently unapplied under quilt.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtso
++++ b/arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3-emmc.dtso
+@@ -35,10 +35,15 @@
+ 			emmc_rootdisk: block-partition-production {
+ 				partname = "production";
+ 			};
++			emmc_rootdisk_b: block-partition-production_b {
++				partname = "production_b";
++			};
+ 		};
+ 	};
+ };
+ 
+ &{/chosen} {
+ 	rootdisk-emmc = <&emmc_rootdisk>;
++	rootdisk-emmc-a = <&emmc_rootdisk>;
++	rootdisk-emmc-b = <&emmc_rootdisk_b>;
+ };

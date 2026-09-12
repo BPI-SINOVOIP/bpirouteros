@@ -1,0 +1,23 @@
+Enable the 4E selector log before autoboot on all three media.
+
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-4e-emmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-4e-emmc_defconfig
+@@ -20,3 +20,4 @@
+ CONFIG_FIT=y
+ CONFIG_BOOTDELAY=1
++CONFIG_USE_PREBOOT=y
+ CONFIG_AUTOBOOT_KEYED=y
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-4e-sdmmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-4e-sdmmc_defconfig
+@@ -20,3 +20,4 @@
+ CONFIG_FIT=y
+ CONFIG_BOOTDELAY=1
++CONFIG_USE_PREBOOT=y
+ CONFIG_AUTOBOOT_KEYED=y
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-4e-snand_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-4e-snand_defconfig
+@@ -20,3 +20,4 @@
+ CONFIG_FIT=y
+ CONFIG_BOOTDELAY=1
++CONFIG_USE_PREBOOT=y
+ CONFIG_AUTOBOOT_KEYED=y

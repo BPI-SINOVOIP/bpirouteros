@@ -1,0 +1,50 @@
+A/B: pick the UBI rootdisk volume by `active_slot` env var (mt7981 / openwrt-one).
+
+ft_system_setup() (from 314-mt7981-select-rootdisk) maps the boot medium to a
+/chosen/rootdisk-<media> phandle. openwrt-one boots from SPI-NAND, so honour the
+`active_slot` env for that case: a -> rootdisk-spim-nand-a, b -> rootdisk-spim-nand-b
+(both added to the kernel DTS by the base-files z10 patch, pointing at the fit-a /
+fit-b UBI volumes). Falls back to plain rootdisk-spim-nand (= fit-a) when unset, so a
+non-A/B / unprovisioned env still boots slot A. Exact strcmp (not slot[0]) keeps this
+consistent with the env's ab_setpart (`test "$active_slot" = b`): a malformed
+active_slot then falls back to slot A on both sides instead of mismatching.
+
+The same selection publishes /chosen/bpirouter,booted-slot as an immutable
+boot-time fact. Linux OTA code compares it with the mutable environment and
+refuses all slot writes when either value is absent or they disagree.
+
+Also enable CONFIG_OF_SYSTEM_SETUP in the openwrt-one spi-nand defconfig: unlike the
+mt7981 *_rfb defconfigs it was never set, so stock openwrt-one never calls
+ft_system_setup at all (it boots purely off the static /chosen/rootdisk). Without
+this the per-slot rootdisk selection above would never run.
+
+--- a/configs/mt7981_openwrt-one-spi-nand_defconfig
++++ b/configs/mt7981_openwrt-one-spi-nand_defconfig
+@@ -8,3 +8,4 @@ CONFIG_NR_DRAM_BANKS=1
+ CONFIG_DEFAULT_DEVICE_TREE="openwrt-one"
+ CONFIG_OF_LIBFDT_OVERLAY=y
++CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_TARGET_MT7981=y
+--- a/board/mediatek/mt7981/mt7981_rfb.c
++++ b/board/mediatek/mt7981/mt7981_rfb.c
+@@ -88,5 +88,20 @@ int ft_system_setup(void *blob, struct bd_info *bd)
+ 	case MT7981_BOOT_SPIM_NAND:
+ 		media = "rootdisk-spim-nand";
++		{
++			const char *slot = env_get("active_slot");
++			const char *booted_slot = "a";
++
++			if (slot && !strcmp(slot, "b")) {
++				media = "rootdisk-spim-nand-b";
++				booted_slot = "b";
++			} else {
++				media = "rootdisk-spim-nand-a";
++			}
++			chosen = fdt_path_offset(blob, "/chosen");
++			if (chosen > 0)
++				fdt_setprop_string(blob, chosen,
++						   "bpirouter,booted-slot", booted_slot);
++		}
+ 		break
+ 		;;
+ 	case MT7981_BOOT_EMMC:

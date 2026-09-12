@@ -1,0 +1,25 @@
+mediatek: build the 4E PCA9555 and PCA9545 drivers into the kernel
+
+The LED expander and SFP I2C channels share this chain with the 8X. There
+are no AS21 PHY reset lines in the 4E device tree.
+
+diff --git a/target/linux/mediatek/filogic/config-6.12 b/target/linux/mediatek/filogic/config-6.12
+index 1fae94f..2aecc44 100644
+--- a/target/linux/mediatek/filogic/config-6.12
++++ b/target/linux/mediatek/filogic/config-6.12
+@@ -211,6 +211,7 @@ CONFIG_GENERIC_STRNLEN_USER=y
+ CONFIG_GENERIC_TIME_VSYSCALL=y
+ CONFIG_GLOB=y
+ CONFIG_GPIO_CDEV=y
++CONFIG_GPIO_PCA953X=y
+ CONFIG_GPIO_WATCHDOG=y
+ CONFIG_GPIO_WATCHDOG_ARCH_INITCALL=y
+ CONFIG_GRO_CELLS=y
+@@ -227,6 +228,7 @@ CONFIG_I2C=y
+ CONFIG_I2C_BOARDINFO=y
+ CONFIG_I2C_CHARDEV=y
+ CONFIG_I2C_MT65XX=y
++CONFIG_I2C_MUX_PCA954x=y
+ CONFIG_ICPLUS_PHY=y
+ # CONFIG_IDPF is not set
+ CONFIG_ILLEGAL_POINTER_VALUE=0xdead000000000000

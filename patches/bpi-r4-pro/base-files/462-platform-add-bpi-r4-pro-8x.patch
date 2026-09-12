@@ -1,0 +1,26 @@
+--- a/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
++++ b/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
+@@ -87,6 +87,7 @@
+ 	bananapi,bpi-r4-2g5|\
+ 	bananapi,bpi-r4-poe|\
+ 	bananapi,bpi-r4-lite|\
++	bananapi,bpi-r4-pro-8x|\
+ 	bazis,ax3000wm|\
+ 	cmcc,a10-ubootmod|\
+ 	cmcc,rax3000m|\
+@@ -281,6 +282,7 @@
+ 	bananapi,bpi-r4-2g5|\
+ 	bananapi,bpi-r4-poe|\
+ 	bananapi,bpi-r4-lite|\
++	bananapi,bpi-r4-pro-8x|\
+ 	bazis,ax3000wm|\
+ 	cmcc,a10-ubootmod|\
+ 	cmcc,rax3000m|\
+@@ -342,6 +344,7 @@
+ 	bananapi,bpi-r4-2g5|\
+ 	bananapi,bpi-r4-poe|\
+ 	bananapi,bpi-r4-lite|\
++	bananapi,bpi-r4-pro-8x|\
+ 	cmcc,rax3000m|\
+ 	gatonetworks,gdsp|\
+ 	mediatek,mt7988a-rfb)

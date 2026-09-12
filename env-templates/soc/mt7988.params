@@ -1,0 +1,8 @@
+# mt7988 (R4 / R4-poe) per-SoC env constants (FIRMWARE_ROLLBACK §10.6.3).
+# Sourced by boards/<board>.params via SOC_ENV. Values with $loadaddr / && MUST be
+# single-quoted so bash keeps them literal (they are u-boot env text, not shell).
+LOADADDR=0x50000000
+BOOTARGS_BASE='console=ttyS0,115200n1 pci=pcie_bus_perf root=/dev/fit0 rootwait'
+UBOOTENV_VOL=0x100000
+SNAND_WRITE_BL2='mtd erase bl2 && mtd write bl2 $loadaddr 0x0 0x80000 && mtd write bl2 $loadaddr 0x80000 0x80000 && mtd write bl2 $loadaddr 0x100000 0x80000 && mtd write bl2 $loadaddr 0x180000 0x80000'
+RESET_FACTORY_SNAND='ubi part ubi ; mw $loadaddr 0x0 0x800 ; ubi write $loadaddr ubootenv 0x800 ; ubi write $loadaddr ubootenv2 0x800'

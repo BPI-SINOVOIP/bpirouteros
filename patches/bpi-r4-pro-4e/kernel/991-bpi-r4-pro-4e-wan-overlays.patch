@@ -1,0 +1,103 @@
+arm64: dts: mediatek: add mutually exclusive 4E WAN overlays
+
+Select one attachment for gmac1 while keeping the logical name "wan".
+Both attachments are absent from the base DTS; compiled overlays need not
+delete inherited properties. GPIO3 selects the SoC WAN SerDes mux (CM17).
+The selected overlay, not netdev discovery, records the boot-time choice.
+
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -28,6 +28,8 @@
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-4e.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-4e-emmc.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-4e-sd.dtbo
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-4e-wan-copper.dtbo
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-4e-wan-sfp.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-emmc.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-aqr.dtbo
+
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-4e-wan-copper.dtso
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-4e", "mediatek,mt7988a";
++};
++
++&{/chosen} {
++	bpirouter,wan-media = "copper";
++};
++
++&gmac1 {
++	openwrt,netdev-name = "wan";
++	phy-mode = "internal";
++	phy-connection-type = "internal";
++	phy-handle = <&int_2p5g_phy>;
++	status = "okay";
++};
++
++&int_2p5g_phy {
++	status = "okay";
++};
++
++&sfp_wan {
++	status = "disabled";
++};
++
++&pio {
++	/* CM17: GPIO3 high selects WAN SFP, low selects the PHY mux leg. */
++	wan_media_hog: wan-media-hog {
++		gpio-hog;
++		gpios = <3 GPIO_ACTIVE_HIGH>;
++		output-low;
++	};
++};
+
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-4e-wan-sfp.dtso
+@@ -0,0 +1,39 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-4e", "mediatek,mt7988a";
++};
++
++&{/chosen} {
++	bpirouter,wan-media = "sfp";
++};
++
++&gmac1 {
++	openwrt,netdev-name = "wan";
++	phy-mode = "10gbase-r";
++	phy-connection-type = "10gbase-r";
++	managed = "in-band-status";
++	sfp = <&sfp_wan>;
++	status = "okay";
++};
++
++&int_2p5g_phy {
++	status = "disabled";
++};
++
++&sfp_wan {
++	status = "okay";
++};
++
++&pio {
++	/* CM17: GPIO3 high selects WAN SFP, low selects the PHY mux leg. */
++	wan_media_hog: wan-media-hog {
++		gpio-hog;
++		gpios = <3 GPIO_ACTIVE_HIGH>;
++		output-high;
++	};
++};

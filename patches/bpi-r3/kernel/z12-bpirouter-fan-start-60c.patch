@@ -1,0 +1,59 @@
+R3: start the fan at 60C (active-low) instead of 85C.
+
+The pwm-fan is thermal-controlled; upstream mapped the active-low trip (60C)
+to cooling state 0 = OFF on this inverted fan (cooling-levels start at 255 =
+off), so the fan only spun from active-med (85C). Add a low level and shift
+the cooling-maps up one, mirroring R4's off/low/med/full ramp:
+  60C (active-low)  -> level 1 (duty 128, ~50%% speed)
+  85C (active-med)  -> level 2 (duty 40)
+ 115C (active-high) -> level 3 (duty 0, full)
+Inverted fan: LOWER duty = FASTER. 128 (~50%%) reliably starts the fan and is
+quieter than the old 40. Tune on hardware: stalls at 60C -> lower it (e.g.
+96); too loud -> raise it (e.g. 192). mt7986 pwm #pwm-cells=2 (no polarity).
+
+--- a/arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7986a-bananapi-bpi-r3.dts
+@@ -45,8 +45,8 @@
+ 	fan: pwm-fan {
+ 		compatible = "pwm-fan";
+ 		#cooling-cells = <2>;
+-		/* cooling level (0, 1, 2) - pwm inverted */
+-		cooling-levels = <255 40 0>;
++		/* cooling level (0=off,1=low,2=med,3=full) - pwm inverted (255=off,0=full) */
++		cooling-levels = <255 128 40 0>;
+ 		pwms = <&pwm 0 10000>;
+ 		status = "okay";
+ 	};
+@@ -151,20 +151,20 @@
+ &cpu_thermal {
+ 	cooling-maps {
+ 		map-cpu-active-high {
+-			/* active: set fan to cooling level 2 */
++			/* active: set fan to cooling level 3 (full) */
++			cooling-device = <&fan 3 3>;
++			trip = <&cpu_trip_active_high>;
++		};
++
++		map-cpu-active-med {
++			/* active: set fan to cooling level 2 (med) */
+ 			cooling-device = <&fan 2 2>;
+-			trip = <&cpu_trip_active_high>;
+-		};
+-
+-		map-cpu-active-med {
+-			/* active: set fan to cooling level 1 */
++			trip = <&cpu_trip_active_med>;
++		};
++
++		map-cpu-active-low {
++			/* active: fan ON at 60C (active-low) - cooling level 1 (low) */
+ 			cooling-device = <&fan 1 1>;
+-			trip = <&cpu_trip_active_med>;
+-		};
+-
+-		map-cpu-active-low {
+-			/* active: set fan to cooling level 0 */
+-			cooling-device = <&fan 0 0>;
+ 			trip = <&cpu_trip_active_low>;
+ 		};
+ 	};

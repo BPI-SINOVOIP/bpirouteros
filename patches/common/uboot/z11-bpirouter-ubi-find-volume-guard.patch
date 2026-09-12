@@ -1,0 +1,26 @@
+ubi: guard ubi_find_volume() against an unattached UBI device
+
+ubi_find_volume() loops `ubi->vtbl_slots` with no check that a UBI partition is
+attached. When `ubi` is NULL (no `ubi part` has run) the loop walks a garbage
+device and strcmp()s a bad volume-name pointer -> Synchronous Abort.
+
+This bites the Airoha EN8811H PHY's FW_IN_UBI path: it calls ubi_volume_read()
+during `Net:` init, before anything attached the UBI. With env in UBI the env
+load happened to attach it first; with CONFIG_ENV_IS_NOWHERE (r3-mini provisioning
+u-boot) nothing attaches it, so the en8811h fw read crashed u-boot before it
+reached the prompt.
+
+Return NULL when no device is attached; ubi_volume_read() then returns ENODEV and
+the caller (en8811h) skips gracefully. Generic, harmless robustness fix.
+--- a/cmd/ubi.c
++++ b/cmd/ubi.c
+@@ -256,6 +256,9 @@
+ 	struct ubi_volume *vol;
+ 	int i;
+ 
++	if (!ubi)
++		return NULL;
++
+ 	for (i = 0; i < ubi->vtbl_slots; i++) {
+ 		vol = ubi->volumes[i];
+ 		if (vol && !strcmp(vol->name, volume))

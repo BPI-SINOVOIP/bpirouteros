@@ -1,0 +1,77 @@
+r3-mini: A/B eMMC GPT + carry emmc_install UBI volume in snand-factory (archetype 2)
+
+Make r3-mini's eMMC layout A/B and let the SPI-NAND golden carry the 8MB eMMC
+provisioning payload, so golden_restore (and the Linux emmc-install) write the
+eMMC A/B slots from NAND with no SD card.
+
+  * emmc-gpt.bin := bpir-gpt emmc  (production + production_b + cfgstage)
+  * snand-factory.bin: carve an 8MB emmc_install payload from the same primitives
+    (offsets match the eMMC env gr_bl/gr_env: bl2@0 -> emmc-fip@0x100000 ->
+    GPT@0x500000 -> env@0x600000), stage via stage-as, expose as `emmc_install`
+    UBI volume, then build the real SPI-NAND image. env slot zero; u-boot ab_seed
+    self-seeds a valid env on first eMMC boot.
+  * append-emmc-gpt: non-doubling bpir-gpt (mid-chain), layout synced to bpir-gpt emmc.
+
+`fit` UBI volume (slot image) already produced by ubinize-image. base-files patch
+(filogic.mk; git apply). NOT image-build-verified here (no disk) — build on WSL,
+confirm `ubi` lists fip/fit/emmc_install.
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -613,6 +613,29 @@
+ endef
+ TARGET_DEVICES += bananapi_bpi-r3
+ 
++# --- bpirouter r3-mini archetype-2 helpers ---------------------------------
++# stage-as <name>: copy the just-built $@ to STAGING_DIR_IMAGE/<name>, then
++# empty $@ so the following pipe steps build the real artifact from scratch.
++define Build/stage-as
++	cp $@ $(STAGING_DIR_IMAGE)/$(1)
++	: > $@
++endef
++
++# append-emmc-gpt: append the eMMC A/B GPT to $@ WITHOUT bpir-gpt's cp-$@ self-
++# copy (bpir-gpt only works at a chain start; mid-chain it doubles content).
++# Layout MUST stay in sync with Build/bpir-gpt emmc.
++define Build/append-emmc-gpt
++	ptgen -g -o $@.eigpt -a 1 -l 1024 \
++		-t 0x83 -N ubootenv	-r	-p 512k@4M \
++		-t 0x83 -N factory	-r	-p 2M@4608k \
++		-t 0xef -N fip		-r	-p 4M@6656k \
++		-t 0x2e -N production		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M@32M \
++		-t 0x2e -N production_b		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M \
++		-t 0x83 -N cfgstage		-p 32M
++	cat $@.eigpt >> $@
++	rm -f $@.eigpt
++endef
++
+ define Device/bananapi_bpi-r3-mini
+   DEVICE_VENDOR := Bananapi
+   DEVICE_MODEL := BPi-R3 Mini
+@@ -641,10 +664,17 @@
+   ARTIFACTS := \
+ 	emmc-gpt.bin emmc-preloader.bin emmc-bl31-uboot.fip \
+ 	snand-factory.bin snand-preloader.bin snand-bl31-uboot.fip
+-  ARTIFACT/emmc-gpt.bin := mt798x-gpt emmc
++  ARTIFACT/emmc-gpt.bin := bpir-gpt emmc
+   ARTIFACT/emmc-preloader.bin := mt7986-bl2 emmc-ddr4
+   ARTIFACT/emmc-bl31-uboot.fip := mt7986-bl31-uboot bananapi_bpi-r3-mini-emmc
+-  ARTIFACT/snand-factory.bin := mt7986-bl2 spim-nand-ubi-ddr4 | pad-to 256k | \
++  # carve 8MB eMMC-install payload (golden_restore gr_bl/gr_env offsets: bl2@0 /
++  # emmc-fip@0x100000 / gpt@0x500000 / env@0x600000), stage as emmc_install vol,
++  # then build the real NAND image. env slot zero -> ab_seed self-seeds (§10.6.1).
++  ARTIFACT/snand-factory.bin := mt7986-bl2 emmc-ddr4 | pad-to 1024k | \
++				mt7986-bl31-uboot bananapi_bpi-r3-mini-emmc | pad-to 5120k | \
++				append-emmc-gpt | pad-to 6144k | pad-to 8192k | \
++				stage-as bpi-r3-mini-emmc-install.bin | \
++				mt7986-bl2 spim-nand-ubi-ddr4 | pad-to 256k | \
+ 				mt7986-bl2 spim-nand-ubi-ddr4 | pad-to 512k | \
+ 				mt7986-bl2 spim-nand-ubi-ddr4 | pad-to 768k | \
+ 				mt7986-bl2 spim-nand-ubi-ddr4 | pad-to 2048k | \
+@@ -652,6 +682,7 @@
+   ARTIFACT/snand-preloader.bin := mt7986-bl2 spim-nand-ubi-ddr4
+   ARTIFACT/snand-bl31-uboot.fip := mt7986-bl31-uboot bananapi_bpi-r3-mini-snand
+   UBINIZE_PARTS := fip=:$(STAGING_DIR_IMAGE)/mt7986_bananapi_bpi-r3-mini-snand-u-boot.fip
++  UBINIZE_PARTS += emmc_install=:$(STAGING_DIR_IMAGE)/bpi-r3-mini-emmc-install.bin
+ ifneq ($(CONFIG_PACKAGE_airoha-en8811h-firmware),)
+   UBINIZE_PARTS += en8811h-fw=:$(STAGING_DIR_IMAGE)/EthMD32.bin
+ endif

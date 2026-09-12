@@ -1,0 +1,159 @@
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -79,6 +79,29 @@
+ 	rm $@.tmp
+ endef
+ 
++define Build/bpir-gpt
++	cp $@ $@.tmp 2>/dev/null || true
++	ptgen -g -o $@.tmp -a 1 -l 1024 \
++		$(if $(findstring sdmmc,$1), \
++			-H \
++			-t 0x83	-N bl2		-r	-p 4079k@17k \
++		) \
++			-t 0x83	-N ubootenv	-r	-p 512k@4M \
++			-t 0x83	-N factory	-r	-p 2M@4608k \
++			-t 0xef	-N fip		-r	-p 4M@6656k \
++		$(if $(findstring sdmmc,$1), \
++				-N install	-r	-p 20M@12M \
++			-t 0x2e -N production		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M@32M \
++		) \
++		$(if $(findstring emmc,$1), \
++			-t 0x2e -N production		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M@32M \
++			-t 0x2e -N production_b		-p $(CONFIG_TARGET_ROOTFS_PARTSIZE)M \
++			-t 0x83 -N cfgstage		-p 32M \
++		)
++	cat $@.tmp >> $@
++	rm $@.tmp
++endef
++
+ # Variation of the normal partition table to account
+ # for factory and mfgdata partition
+ #
+@@ -571,33 +594,28 @@
+ 		     e2fsprogs f2fsck mkf2fs mt7986-wo-firmware
+   IMAGES := sysupgrade.itb
+   KERNEL_LOADADDR := 0x44000000
+-  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
+   ARTIFACTS := \
+-	       emmc-preloader.bin emmc-bl31-uboot.fip \
++	       emmc-gpt.bin emmc-preloader.bin emmc-bl31-uboot.fip \
+ 	       nor-preloader.bin nor-bl31-uboot.fip \
+ 	       sdcard.img.gz \
+ 	       snand-preloader.bin snand-bl31-uboot.fip
+   ARTIFACT/emmc-preloader.bin	:= mt7986-bl2 emmc-ddr4
+   ARTIFACT/emmc-bl31-uboot.fip	:= mt7986-bl31-uboot bananapi_bpi-r3-emmc
++  ARTIFACT/emmc-gpt.bin		:= bpir-gpt emmc
+   ARTIFACT/nor-preloader.bin	:= mt7986-bl2 nor-ddr4
+   ARTIFACT/nor-bl31-uboot.fip	:= mt7986-bl31-uboot bananapi_bpi-r3-nor
+   ARTIFACT/snand-preloader.bin	:= mt7986-bl2 spim-nand-ubi-ddr4
+   ARTIFACT/snand-bl31-uboot.fip	:= mt7986-bl31-uboot bananapi_bpi-r3-snand
+-  ARTIFACT/sdcard.img.gz	:= mt798x-gpt sdmmc |\
++  ARTIFACT/sdcard.img.gz	:= bpir-gpt sdmmc |\
+ 				   pad-to 17k | mt7986-bl2 sdmmc-ddr4 |\
+ 				   pad-to 6656k | mt7986-bl31-uboot bananapi_bpi-r3-sdmmc |\
+-				$(if $(CONFIG_TARGET_ROOTFS_INITRAMFS),\
+-				   pad-to 12M | append-image-stage initramfs-recovery.itb | check-size 44m |\
+-				) \
+-				   pad-to 44M | mt7986-bl2 spim-nand-ubi-ddr4 |\
+-				   pad-to 45M | mt7986-bl31-uboot bananapi_bpi-r3-snand |\
+-				   pad-to 49M | mt7986-bl2 nor-ddr4 |\
+-				   pad-to 50M | mt7986-bl31-uboot bananapi_bpi-r3-nor |\
+-				   pad-to 51M | mt7986-bl2 emmc-ddr4 |\
+-				   pad-to 52M | mt7986-bl31-uboot bananapi_bpi-r3-emmc |\
+-				   pad-to 56M | mt798x-gpt emmc |\
++				   pad-to 12M | mt7986-bl2 spim-nand-ubi-ddr4 |\
++				   pad-to 13M | mt7986-bl31-uboot bananapi_bpi-r3-snand |\
++				   pad-to 19M | mt7986-bl2 emmc-ddr4 |\
++				   pad-to 20M | mt7986-bl31-uboot bananapi_bpi-r3-emmc |\
++				   pad-to 24M | bpir-gpt emmc |\
+ 				$(if $(CONFIG_TARGET_ROOTFS_SQUASHFS),\
+-				   pad-to 64M | append-image squashfs-sysupgrade.itb | check-size |\
++				   pad-to 32M | append-image squashfs-sysupgrade.itb | check-size |\
+ 				) \
+ 				  gzip
+ ifeq ($(DUMP),)
+@@ -670,29 +688,25 @@
+   DEVICE_COMPAT_MESSAGE := The non-switch ports were renamed to match the board/case labels
+   IMAGES := sysupgrade.itb
+   KERNEL_LOADADDR := 0x46000000
+-  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
+   ARTIFACTS := \
+ 	       emmc-gpt.bin emmc-preloader.bin emmc-bl31-uboot.fip \
+ 	       sdcard.img.gz \
+ 	       snand-preloader.bin snand-bl31-uboot.fip
+-  ARTIFACT/emmc-gpt.bin		:= mt798x-gpt emmc
++  ARTIFACT/emmc-gpt.bin		:= bpir-gpt emmc
+   ARTIFACT/emmc-preloader.bin	:= mt7988-bl2 emmc-comb
+   ARTIFACT/emmc-bl31-uboot.fip	:= mt7988-bl31-uboot $$(DEVICE_NAME)-emmc
+   ARTIFACT/snand-preloader.bin	:= mt7988-bl2 spim-nand-ubi-comb
+   ARTIFACT/snand-bl31-uboot.fip	:= mt7988-bl31-uboot $$(DEVICE_NAME)-snand
+-  ARTIFACT/sdcard.img.gz	:= mt798x-gpt sdmmc |\
++  ARTIFACT/sdcard.img.gz	:= bpir-gpt sdmmc |\
+ 				   pad-to 17k | mt7988-bl2 sdmmc-comb |\
+ 				   pad-to 6656k | mt7988-bl31-uboot $$(DEVICE_NAME)-sdmmc |\
+-				$(if $(CONFIG_TARGET_ROOTFS_INITRAMFS),\
+-				   pad-to 12M | append-image-stage initramfs-recovery.itb | check-size 44m |\
+-				) \
+-				   pad-to 44M | mt7988-bl2 spim-nand-ubi-comb |\
+-				   pad-to 45M | mt7988-bl31-uboot $$(DEVICE_NAME)-snand |\
+-				   pad-to 51M | mt7988-bl2 emmc-comb |\
+-				   pad-to 52M | mt7988-bl31-uboot $$(DEVICE_NAME)-emmc |\
+-				   pad-to 56M | mt798x-gpt emmc |\
++				   pad-to 12M | mt7988-bl2 spim-nand-ubi-comb |\
++				   pad-to 13M | mt7988-bl31-uboot $$(DEVICE_NAME)-snand |\
++				   pad-to 19M | mt7988-bl2 emmc-comb |\
++				   pad-to 20M | mt7988-bl31-uboot $$(DEVICE_NAME)-emmc |\
++				   pad-to 24M | bpir-gpt emmc |\
+ 				$(if $(CONFIG_TARGET_ROOTFS_SQUASHFS),\
+-				   pad-to 64M | append-image squashfs-sysupgrade.itb | check-size |\
++				   pad-to 32M | append-image squashfs-sysupgrade.itb | check-size |\
+ 				) \
+ 				  gzip
+   IMAGE_SIZE := $$(shell expr 64 + $$(CONFIG_TARGET_ROOTFS_PARTSIZE))m
+@@ -742,36 +756,31 @@
+   KERNEL_INITRAMFS := kernel-bin | lzma | \
+ 	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
+   IMAGES := sysupgrade.itb
+-  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
+   KERNEL_IN_UBI := 1
+   IMAGES := sysupgrade.itb
+   IMAGE/sysupgrade.itb := append-kernel | fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-with-rootfs | pad-rootfs | append-metadata
+   ARTIFACTS := \
+-	       emmc-preloader.bin emmc-bl31-uboot.fip \
++	       emmc-gpt.bin emmc-preloader.bin emmc-bl31-uboot.fip \
+ 	       nor-preloader.bin nor-bl31-uboot.fip \
+ 	       sdcard.img.gz \
+ 	       snand-preloader.bin snand-bl31-uboot.fip
+   ARTIFACT/emmc-preloader.bin	:= mt7987-bl2 emmc-comb
+   ARTIFACT/emmc-bl31-uboot.fip	:= mt7987-bl31-uboot bananapi_bpi-r4-lite-emmc
++  ARTIFACT/emmc-gpt.bin		:= bpir-gpt emmc
+   ARTIFACT/nor-preloader.bin	:= mt7987-bl2 nor-comb
+   ARTIFACT/nor-bl31-uboot.fip	:= mt7987-bl31-uboot bananapi_bpi-r4-lite-nor
+   ARTIFACT/snand-preloader.bin	:= mt7987-bl2 spim-nand2-ubi-comb
+   ARTIFACT/snand-bl31-uboot.fip	:= mt7987-bl31-uboot bananapi_bpi-r4-lite-snand
+-  ARTIFACT/sdcard.img.gz	:= mt798x-gpt sdmmc |\
++  ARTIFACT/sdcard.img.gz	:= bpir-gpt sdmmc |\
+ 				   pad-to 17k | mt7987-bl2 sdmmc-comb |\
+ 				   pad-to 6656k | mt7987-bl31-uboot bananapi_bpi-r4-lite-sdmmc |\
+-				$(if $(CONFIG_TARGET_ROOTFS_INITRAMFS),\
+-				   pad-to 12M | append-image-stage initramfs-recovery.itb | check-size 44m |\
+-				) \
+-				   pad-to 44M | mt7987-bl2 spim-nand2-ubi-comb |\
+-				   pad-to 45M | mt7987-bl31-uboot bananapi_bpi-r4-lite-snand |\
+-				   pad-to 49M | mt7987-bl2 nor-comb |\
+-				   pad-to 50M | mt7987-bl31-uboot bananapi_bpi-r4-lite-nor |\
+-				   pad-to 51M | mt7987-bl2 emmc-comb |\
+-				   pad-to 52M | mt7987-bl31-uboot bananapi_bpi-r4-lite-emmc |\
+-				   pad-to 56M | mt798x-gpt emmc |\
++				   pad-to 12M | mt7987-bl2 spim-nand2-ubi-comb |\
++				   pad-to 13M | mt7987-bl31-uboot bananapi_bpi-r4-lite-snand |\
++				   pad-to 19M | mt7987-bl2 emmc-comb |\
++				   pad-to 20M | mt7987-bl31-uboot bananapi_bpi-r4-lite-emmc |\
++				   pad-to 24M | bpir-gpt emmc |\
+ 				$(if $(CONFIG_TARGET_ROOTFS_SQUASHFS),\
+-				   pad-to 64M | append-image squashfs-sysupgrade.itb | check-size |\
++				   pad-to 32M | append-image squashfs-sysupgrade.itb | check-size |\
+ 				) \
+ 				  gzip
+ ifeq ($(DUMP),)

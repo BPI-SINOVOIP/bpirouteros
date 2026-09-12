@@ -1,0 +1,32 @@
+A/B: env-backed u-boot bootcount on R3-mini (mt7986), foundation for A/B rollback.
+
+Ported from bpi-r3 z02. Adds BOOTCOUNT_LIMIT/ENV/ALTBOOTCMD to R3-mini's two
+media defconfigs (emmc/snand), after the AUTOBOOT_STOP_STR line z01 adds. The
+counter is gated by the `upgrade_available` env var, so steady-state boots
+neither count nor write flash; once it exceeds `bootlimit`, autoboot runs
+altbootcmd (slot switch).
+
+--- a/configs/mt7986a_bpi-r3-mini-emmc_defconfig
++++ b/configs/mt7986a_bpi-r3-mini-emmc_defconfig
+@@ -22,6 +22,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7986a-bpi-r3-mini.dtb"
+ CONFIG_LOGLEVEL=7
+--- a/configs/mt7986a_bpi-r3-mini-snand_defconfig
++++ b/configs/mt7986a_bpi-r3-mini-snand_defconfig
+@@ -19,6 +19,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7986a-bpi-r3-mini.dtb"
+ CONFIG_LOGLEVEL=7

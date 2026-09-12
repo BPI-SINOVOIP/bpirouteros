@@ -1,0 +1,95 @@
+--- a/defenvs/openwrt-one-spi-nand_env
++++ b/defenvs/openwrt-one-spi-nand_env
+@@ -1,62 +1,34 @@
+-ethaddr_factory=mtd read factory 0x46000000 0x0 0x20000 && env readmem -b ethaddr 0x4600002a 0x6 ; setenv ethaddr_factory
+-ipaddr=192.168.11.11
+-serverip=192.168.11.23
++ipaddr=10.1.1.3
++serverip=10.1.1.1
+ loadaddr=0x46000000
+-console=earlycon=uart8250,mmio32,0x11002000 console=ttyS0
+-bootcmd=run check_buttons ; run led_start ; run boot_calibration ; run boot_production ; run boot_recovery
+ bootconf=config-1
+-bootdelay=0
+-bootfile=openwrt-mediatek-filogic-openwrt_one-initramfs.itb
+-bootfile_bl2=openwrt-mediatek-filogic-openwrt_one-snand-preloader.bin
+-bootfile_fip=openwrt-mediatek-filogic-openwrt_one-snand-bl31-uboot.fip
+-bootfile_upg=openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb
+-bootmenu_confirm_return=askenv - Press ENTER to return to menu ; run led_boot ; bootmenu 60
+-bootmenu_default=0
+-bootmenu_delay=0
+-bootmenu_title=      [0;34m( ( ( [1;39mOpenWrt[0;34m ) ) )  [0;36m[SPI-NAND][0m
+-bootmenu_0=Initialize environment.=run _firstboot
+-bootmenu_0d=Run default boot command.=run boot_default
+-bootmenu_1=Boot system via TFTP.=run boot_tftp ; run bootmenu_confirm_return
+-bootmenu_2=Boot production system from NAND.=run boot_production ; run bootmenu_confirm_return
+-bootmenu_3=Boot recovery system from NAND.=run boot_recovery ; run bootmenu_confirm_return
+-bootmenu_4=Load production system via TFTP then write to NAND.=noboot=1 ; replacevol=1 ; run boot_tftp_production ; noboot= ; replacevol= ; run bootmenu_confirm_return
+-bootmenu_5=Load recovery system via TFTP then write to NAND.=noboot=1 ; replacevol=1 ; run boot_tftp_recovery ; noboot= ; replacevol= ; run bootmenu_confirm_return
+-bootmenu_6=[31mLoad BL31+U-Boot FIP via TFTP then write to NAND.[0m=run boot_tftp_write_fip ; run bootmenu_confirm_return
+-bootmenu_7=[31mLoad BL2 preloader via TFTP then write to NAND.[0m=run boot_tftp_write_bl2 ; run bootmenu_confirm_return
+-bootmenu_8=Reboot.=reset
+-bootmenu_9=Reset all settings to factory defaults.=run reset_factory ; reset
+-boot_default=run bootcmd ; run boot_recovery ; replacevol=1 ; run boot_tftp_forever
+-boot_calibration=ubi read $loadaddr calibration && bootm $loadaddr#$bootconf
+-boot_production=led white on ; run ubi_read_production && bootm $loadaddr#$bootconf ; led white off
+-boot_recovery=led green on ; run ubi_read_recovery && bootm $loadaddr#$bootconf ; led green off
+-boot_tftp=run led_start ; tftpboot $loadaddr $bootfile && bootm $loadaddr#$bootconf
+-boot_tftp_forever=led green off ; led white off ; led red on ; while true ; do run boot_tftp_recovery ; led red off ; sleep 1 ; done
+-boot_tftp_production=tftpboot $loadaddr $bootfile_upg && test $replacevol = 1 && iminfo $loadaddr && run ubi_write_production ; if test $noboot = 1 ; then else bootm $loadaddr#$bootconf ; fi
+-boot_tftp_recovery=tftpboot $loadaddr $bootfile && test $replacevol = 1 && iminfo $loadaddr && run ubi_write_recovery ; if test $noboot = 1 ; then else bootm $loadaddr#$bootconf ; fi
++bootdelay=1
++usb_pgood_delay=4000
++bootfile=openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb
++bootfile_factory=snand-factory.bin
++bootfile_factory_crc=snand-factory.crc
++bootled_pwr=white
++bootled_rec=green
++active_slot=a
++altcount=0
++bootlimit=3
++ab_seed=if test "$envset" != 1 ; then run ubi_create_env ; setenv envset 1 ; saveenv ; fi
++ab_setpart=if test "$active_slot" = b ; then setenv fitvol fit-b ; else setenv fitvol fit-a ; fi
++ab_verify_rollback=env load && test "$active_slot" = "$ab_expected_slot" && test "$altcount" = "$ab_expected_altcount" && test -z "$cfg_pending" && test "$upgrade_available" = 0 && test "$bootcount" = 0
++ubi_create_env=ubi check ubootenv || ubi create ubootenv 0x1f000 dynamic ; ubi check ubootenv2 || ubi create ubootenv2 0x1f000 dynamic
++ubi_prepare_rootfs=if ubi check rootfs_data ; then else ubi create rootfs_data 0x5000000 dynamic ; fi ; if ubi check rootfs_data_alt ; then else ubi create rootfs_data_alt 0x5000000 dynamic ; fi ; if ubi check cfgstage ; then else ubi create cfgstage 0x800000 dynamic ; fi ; run ab_cfgswap
++ab_cfgswap=if test "$last_slot" = "$active_slot" ; then else if test "$last_slot" = "" ; then setenv last_slot $active_slot ; saveenv ; else ubi rename rootfs_data rootfs_data_tmp ; ubi rename rootfs_data_alt rootfs_data ; ubi rename rootfs_data_tmp rootfs_data_alt ; setenv last_slot $active_slot ; saveenv ; fi ; fi
++ubi_read_production=ubi read $loadaddr $fitvol && iminfo $loadaddr && run ubi_prepare_rootfs
++boot_production=led $bootled_pwr on ; run ubi_read_production && bootm $loadaddr#$bootconf ; led $bootled_pwr off
++boot_ubi=run boot_production
+ boot_tftp=tftpboot $loadaddr $bootfile && bootm $loadaddr#$bootconf
+-boot_tftp_write_fip=tftpboot $loadaddr $bootfile_fip && run ubi_write_fip && run reset_factory
+-boot_tftp_write_bl2=tftpboot $loadaddr $bootfile_bl2 && run snand_write_bl2
+-check_buttons=if button front ; then run boot_recovery ; run boot_tftp ; run led_loop_error ; else if button back ; then ; run usb_recover ; run led_loop_error ; fi ; fi
+-led_boot=led green on ; led white on ; led red on
+-led_done=led green on ; led white off ; led red off
+-led_loop_done=led white off ; led green on ; echo done ; while true ; do  sleep 1 ; done
+-led_loop_error=led white off ; led green off ; while true ; do led red on ; sleep 1 ; led red off ; sleep 1 ; done
+-led_start=led white on ; led green off ; led red off
+-preboot=run led_boot
+ reset_factory=mw $loadaddr 0xff 0x1f000 ; ubi write $loadaddr ubootenv 0x1f000 ; ubi write $loadaddr ubootenv2 0x1f000 ; ubi remove rootfs_data
+-snand_write_bl2=mtd erase bl2 && for offset in 0x0 0x40000 0x80000 0xc0000 ; do mtd write bl2 $loadaddr $offset 0x40000 ; done
+-ubi_create_env=ubi check ubootenv || ubi create ubootenv 0x1f000 dynamic ; ubi check ubootenv2 || ubi create ubootenv2 0x1f000 dynamic
+-ubi_prepare_rootfs=if ubi check rootfs_data ; then else if env exists rootfs_data_max ; then ubi create rootfs_data $rootfs_data_max dynamic || ubi create rootfs_data - dynamic ; else ubi create rootfs_data - dynamic ; fi ; fi
+-ubi_read_production=ubi read $loadaddr fit && iminfo $loadaddr && run ubi_prepare_rootfs
+-ubi_read_recovery=ubi check recovery && ubi read $loadaddr recovery
+-ubi_remove_rootfs=ubi check rootfs_data && ubi remove rootfs_data
+-usb_pgood_delay=4000
+-usb_recover=run led_start ; usb start && run usb_recover_production && run led_loop_done
+-usb_recover_production=fatload usb 0:1 ${loadaddr} ${bootfile_upg} && iminfo $loadaddr && run ubi_write_production
+-ubi_write_fip=run ubi_remove_rootfs ; ubi check fip && ubi remove fip ; ubi create fip $filesize static && ubi write $loadaddr fip $filesize
+-ubi_write_production=ubi check fit && ubi remove fit ; run ubi_remove_rootfs ; ubi create fit $filesize dynamic && ubi write $loadaddr fit $filesize
+-ubi_write_recovery=ubi check recovery && ubi remove recovery ; run ubi_remove_rootfs ; ubi create recovery $filesize dynamic && ubi write $loadaddr recovery $filesize
+-_init_env=setenv _init_env ; run ubi_create_env ; saveenv ; saveenv
+-_firstboot=setenv _firstboot ; run ethaddr_factory ; run _switch_to_menu ; run _init_env ; bootmenu
+-_switch_to_menu=setenv _switch_to_menu ; setenv bootdelay 3 ; setenv bootmenu_delay 3 ; setenv bootmenu_0 $bootmenu_0d ; setenv bootmenu_0d ; run _bootmenu_update_title
+-_bootmenu_update_title=setenv _bootmenu_update_title ; setenv bootmenu_title "$bootmenu_title       [33m$ver[0m"
++bootcmd=if button back ; then run usb_recover ; fi ; run ab_seed ; run ab_setpart ; run boot_ubi ; echo "*** boot failed - rebooting ***" ; reset
++altbootcmd=if button back ; then run usb_recover ; fi ; if test "$altcount" -ge 4 ; then echo "*** A/B exhausted - halting ***" ; setenv ab_expected_slot $active_slot ; setenv ab_expected_altcount $altcount ; setenv upgrade_available 0 ; setenv bootcount 0 ; setenv cfg_pending ; if saveenv && run ab_verify_rollback ; then run ab_setpart ; run boot_ubi ; echo "NO BOOTABLE SLOT" ; else echo "*** rollback env verify failed - halting ***" ; fi ; else echo "*** slot $active_slot failed - switching ***" ; if test "$active_slot" = b ; then setenv ab_expected_slot a ; setenv active_slot a ; else setenv ab_expected_slot b ; setenv active_slot b ; fi ; setexpr ab_expected_altcount $altcount + 1 ; setexpr altcount $altcount + 1 ; setenv bootcount 0 ; setenv upgrade_available 0 ; setenv cfg_pending ; if saveenv && run ab_verify_rollback ; then run ab_setpart ; run boot_ubi ; reset ; else echo "*** rollback env verify failed - halting ***" ; fi ; fi
++ab_reset=setenv active_slot a ; setenv bootcount 0 ; setenv altcount 0 ; setenv upgrade_available 0 ; saveenv
++usb_recover=led $bootled_pwr on ; usb start && run usb_read_factory && run nand_write_factory && run usb_recover_done ; led white off ; led green off ; led orange off
++usb_read_factory=if fatload usb 0 $loadaddr $bootfile_factory ; then setenv imgsz $filesize ; else usb reset ; if fatload usb 0 $loadaddr $bootfile_factory ; then setenv imgsz $filesize ; else setenv imgsz 0 ; fi ; fi ; test "$imgsz" != 0 && fatload usb 0 0x4f000000 $bootfile_factory_crc
++verify_src=crc32 $loadaddr $imgsz 0x4f000004 && cmp.b 0x4f000000 0x4f000004 0x4
++verify_nand=mtd read spi-nand0 0x4e000000 0x0 $imgsz && cmp.b $loadaddr 0x4e000000 $imgsz
++nand_write_factory=led white on ; led green on ; led orange on ; run verify_src && mtd erase spi-nand0 && mtd write spi-nand0 $loadaddr 0x0 $imgsz && run verify_nand && run ab_reset
++usb_recover_done=led green on ; echo "*** USB restore done - rebooting ***" ; reset

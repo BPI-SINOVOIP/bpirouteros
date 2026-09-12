@@ -1,0 +1,36 @@
+Download Broadcom's b43/brcmsmac firmware only when a package needs it.
+
+OpenWrt registers both Download rules unconditionally, so `make download`
+fetches two proprietary Broadcom firmware tarballs on every build regardless of
+configuration. No BpiRouter board selects kmod-b43 or kmod-brcmsmac, so they are
+never used -- but they are fetched, and they land in any source cache collected
+from a real download, where they become two non-redistributable blobs in a
+bundle that has no reason to carry them.
+
+Guarding the registration on the config symbol leaves the packages working for
+anyone who does select them.
+
+diff --git a/package/kernel/mac80211/broadcom.mk b/package/kernel/mac80211/broadcom.mk
+index 7bc8aa6..53e7272 100644
+--- a/package/kernel/mac80211/broadcom.mk
++++ b/package/kernel/mac80211/broadcom.mk
+@@ -92,7 +92,9 @@ define Download/b43
+   URL:=$(PKG_B43_FWV4_SOURCE_URL)
+   HASH:=$(PKG_B43_FWV4_HASH)
+ endef
++ifneq ($(CONFIG_PACKAGE_kmod-b43),)
+ $(eval $(call Download,b43))
++endif
+ 
+ define KernelPackage/b43
+   $(call KernelPackage/mac80211/Default)
+@@ -375,7 +377,9 @@ define Download/brcmsmac
+   URL:=$(PKG_BRCMSMAC_FW_SOURCE_URL)
+   HASH:=$(PKG_BRCMSMAC_FW_HASH)
+ endef
++ifneq ($(CONFIG_PACKAGE_kmod-brcmsmac),)
+ $(eval $(call Download,brcmsmac))
++endif
+ 
+ define KernelPackage/brcmsmac
+   $(call KernelPackage/mac80211/Default)

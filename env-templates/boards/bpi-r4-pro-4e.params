@@ -1,0 +1,20 @@
+# bpi-r4-pro-4e (BPI-R4 Pro 4E) u-boot defenv params (FIRMWARE_ROLLBACK.md §10.6).
+# Same MT7988A SoC as r4 -> reuses ../soc/mt7988.params. A new board = new params
+# + vendored pristine. WAN selection uses the shared bootm hooks below.
+SOC_ENV=mt7988                                              # ../soc/mt7988.params (LOADADDR/BOOTARGS_BASE/NAND geom)
+DTBBASE=mt7988a-bananapi-bpi-r4-pro-4e                      # config-/overlay base (dash form)
+IMGPREFIX=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-4e   # bootfile prefix (underscore form)
+DEFENV_BASE=bananapi_bpi-r4-pro-4e                          # defenvs/<DEFENV_BASE>_<medium>_env
+MEDIA="emmc sdmmc snand"                                    # media this board generates
+BOOTLED_PWR=act                                    # u-boot LED label (shared schematic; 4E hardware verification pending)
+BOOTLED_REC=err                                     # u-boot LED label (non-fatal warning if absent)
+BOOTCONF_EXTRA=                                             # no extra DT overlay
+# err/act system LEDs (pca9555). Writing flash = both on; fault = err on.
+LED_WRITING='led act on ; led err on ; '   # prepend: lit while writing NAND/eMMC
+PROV_DONE=' ; if test $? = 0 ; then led act off ; led err off ; else led act off ; led err on ; fi'  # success: both off; fail: err red
+LED_FAULT='led err on ; '                  # prepend: A/B fallback fault -> err
+# Read only this medium's environment. Derived values are recomputed before
+# each bootm; never saveenv or rewrite the user's selector during boot.
+BOOTM_PREPARE='run r4pro_4e_select_wan && '
+EXTRA_ENV='r4pro_4e_select_wan=if test "$r4pro_4e_wan_media" = sfp ; then setenv r4pro_4e_wan_selected sfp ; else setenv r4pro_4e_wan_selected copper ; if test -n "$r4pro_4e_wan_media" && test "$r4pro_4e_wan_media" != copper ; then echo "WARNING: invalid r4pro_4e_wan_media; using copper" ; fi ; fi ; setenv r4pro_4e_wan_overlay mt7988a-bananapi-bpi-r4-pro-4e-wan-$r4pro_4e_wan_selected && setenv bootconf config-mt7988a-bananapi-bpi-r4-pro-4e#$r4pro_4e_wan_overlay && echo "SKU=bpi-r4-pro-4e selector=[$r4pro_4e_wan_media] selected=$r4pro_4e_wan_selected overlay=$r4pro_4e_wan_overlay"
+preboot=run r4pro_4e_select_wan'

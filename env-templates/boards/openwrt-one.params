@@ -1,0 +1,13 @@
+# openwrt-one u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.12.1).
+# Family-2 (archetype-3): NAND-only, A/B in UBI volumes fit-a/fit-b (Track B), no
+# eMMC/SD/GPT. The defenv is a complete UBI A/B boot env (media/spi-nand.env.in),
+# NOT a parameterization of the eMMC family-1 templates. L4 recovery = USB full
+# reinstall of snand-factory.bin (CRC32-BE verified), like r3-mini's flash_nand.
+SOC_ENV=mt7981                                       # source ../soc/mt7981.params
+DEFENV_BASE=openwrt-one                               # defenvs/<BASE><SEP><medium>_env
+DEFENV_SEP=-                                          # openwrt-one-spi-nand_env (hyphen, not '_')
+MEDIA="spi-nand"                                      # the single NAND medium
+IMGPREFIX=openwrt-mediatek-filogic-openwrt_one        # bootfile prefix (underscore form)
+BOOTLED_PWR=white                                     # u-boot LED label for power/boot indicator
+BOOTLED_REC=green                                     # u-boot LED label for recovery indicator
+OVERLAY_SIZE=0x5000000                                # per-slot rootfs_data overlay size (80MB; two slots + 2 fits fit in 256MB NAND)

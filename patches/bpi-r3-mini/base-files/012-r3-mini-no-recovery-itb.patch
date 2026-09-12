@@ -1,0 +1,21 @@
+r3-mini: drop unused recovery initramfs image (Model B)
+
+Model B provisioning runs entirely in u-boot; the SPI-NAND golden never boots
+Linux and snand-factory's `fit` UBI volume carries the production sysupgrade, not
+a recovery initramfs. The upstream KERNEL_INITRAMFS (-recovery.itb) artifact is
+therefore dead weight — drop it from the r3-mini device recipe.
+
+base-files patch (filogic.mk; git apply). Applies after 011 (different region of
+the same Device block).
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -624,9 +624,6 @@ define Device/bananapi_bpi-r3-mini
+ 		     kmod-phy-airoha-en8811h kmod-usb3 e2fsprogs f2fsck mkf2fs mt7986-wo-firmware
+   KERNEL_LOADADDR := 0x44000000
+   KERNEL := kernel-bin | gzip
+-  KERNEL_INITRAMFS := kernel-bin | lzma | \
+-    fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
+-  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
+   BLOCKSIZE := 128k
+   PAGESIZE := 2048
+   KERNEL_IN_UBI := 1

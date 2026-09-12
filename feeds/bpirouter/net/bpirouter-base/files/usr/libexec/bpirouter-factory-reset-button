@@ -1,0 +1,20 @@
+#!/bin/sh
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+
+# The running-system long-press must enter apid's factory-reset transaction.
+# Never fall back to factoryreset/firstboot here: only apid can seal and drain
+# its in-process writers and share the API's OTA/D21/restore admission gates.
+
+pids="$(pidof bpirouter-apid 2>/dev/null)" || exit 1
+set -- $pids
+[ "$#" -eq 1 ] || exit 1
+pid=$1
+case "$pid" in
+	''|*[!0-9]*) exit 1 ;;
+esac
+[ "$pid" -gt 1 ] || exit 1
+[ -r "/proc/$pid/exe" ] || exit 1
+exe="$(readlink "/proc/$pid/exe" 2>/dev/null)" || exit 1
+[ "$exe" = /usr/bin/bpirouter-apid ] || exit 1
+
+kill -USR1 "$pid"

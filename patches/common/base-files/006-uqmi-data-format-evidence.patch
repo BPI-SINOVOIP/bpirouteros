@@ -1,0 +1,178 @@
+diff --git a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+--- a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
++++ b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+@@ -31,6 +31,75 @@ proto_qmi_init_config() {
+ 	proto_config_add_defaults
+ }
+ 
++qmi_read_json_value() {
++	local expression="$1"
++	jsonfilter -e "$expression" 2>/dev/null
++}
++
++qmi_negotiate_data_format() {
++	local device="$1"
++	local ctl_dataformat="" dataformat_json="" wda_dataformat=""
++	local attempt=0
++
++	# WDA is authoritative when available. Some modems need a short settling
++	# interval after entering online mode, so retry only this read; do not retry
++	# registration or any other physical operation here.
++	uqmi -s -d "$device" -t 1000 --wda-set-data-format 802.3 > /dev/null 2>&1 || true
++	while [ "$attempt" -lt 3 ]; do
++		dataformat_json="$(uqmi -s -d "$device" -t 1000 --wda-get-data-format 2>/dev/null)" || dataformat_json=""
++		wda_dataformat="$(printf '%s\n' "$dataformat_json" | qmi_read_json_value '@["link-layer-protocol"]')"
++		case "$wda_dataformat" in
++			802.3|raw-ip)
++				printf '%s\n' "$wda_dataformat"
++				return 0
++				;;
++		esac
++		attempt=$((attempt + 1))
++		[ "$attempt" -ge 3 ] || sleep 1
++	done
++
++	# CTL is the compatibility path for QMI implementations without readable
++	# WDA. Run it only after WDA is exhausted so the accepted evidence describes
++	# the final format operation. The patched command returns the protocol
++	# acknowledged by the modem; its exit status alone is not evidence.
++	dataformat_json="$(uqmi -s -d "$device" -t 1000 --set-data-format 802.3 2>/dev/null)" || dataformat_json=""
++	ctl_dataformat="$(printf '%s\n' "$dataformat_json" | qmi_read_json_value '@')"
++	case "$ctl_dataformat" in
++		802.3|raw-ip) ;;
++		*) ctl_dataformat="" ;;
++	esac
++
++	[ -n "$ctl_dataformat" ] || return 1
++	printf '%s\n' "$ctl_dataformat"
++}
++
++qmi_apply_data_format() {
++	local dataformat="$1"
++	local raw_ip_path="$2"
++	local driver_dataformat=""
++
++	case "$dataformat" in
++		raw-ip)
++			[ -f "$raw_ip_path" ] || return 1
++			printf 'Y\n' > "$raw_ip_path" || return 1
++			driver_dataformat="$(cat "$raw_ip_path" 2>/dev/null)"
++			[ "$driver_dataformat" = "Y" ]
++			;;
++		802.3)
++			# Old 802.3-only qmi_wwan drivers need no raw_ip attribute. When
++			# the attribute exists, set and read it back so a previous raw-IP
++			# session cannot leak into this modem lifetime.
++			[ -e "$raw_ip_path" ] || return 0
++			printf 'N\n' > "$raw_ip_path" || return 1
++			driver_dataformat="$(cat "$raw_ip_path" 2>/dev/null)"
++			[ "$driver_dataformat" = "N" ]
++			;;
++		*)
++			return 1
++			;;
++	esac
++}
++
+ proto_qmi_setup() {
+ 	local interface="$1"
+ 
+@@ -125,22 +194,19 @@ proto_qmi_setup() {
+ 	# Go online
+ 	uqmi -s -d "$device" -t 1000 --set-device-operating-mode online > /dev/null 2>&1
+ 
+-	# Set IP format
+-	uqmi -s -d "$device" -t 1000 --set-data-format 802.3 > /dev/null 2>&1
+-	uqmi -s -d "$device" -t 1000 --wda-set-data-format 802.3 > /dev/null 2>&1
+-	json_load "$(uqmi -s -d "$device" -t 1000 --wda-get-data-format)"
+-	json_get_var dataformat link-layer-protocol
+-
+-	if [ "$dataformat" = "raw-ip" ]; then
+-
+-		[ -f /sys/class/net/$ifname/qmi/raw_ip ] || {
+-			echo "Device only supports raw-ip mode but is missing this required driver attribute: /sys/class/net/$ifname/qmi/raw_ip"
+-			return 1
+-		}
+-
+-		echo "Device does not support 802.3 mode. Informing driver of raw-ip only for $ifname .."
+-		echo "Y" > /sys/class/net/$ifname/qmi/raw_ip
+-	fi
++	# A QMI session is usable only when modem and driver agree on the link-layer
++	# protocol. Never turn an unreadable or unknown modem response into an
++	# implicit 802.3 success.
++	dataformat="$(qmi_negotiate_data_format "$device")" || {
++		echo "Unable to determine the modem QMI data format"
++		proto_notify_error "$interface" DATA_FORMAT_FAILED
++		return 1
++	}
++	qmi_apply_data_format "$dataformat" "/sys/class/net/$ifname/qmi/raw_ip" || {
++		echo "Unable to apply QMI data format $dataformat to $ifname"
++		proto_notify_error "$interface" DATA_FORMAT_FAILED
++		return 1
++	}
+ 
+ 	uqmi -s -d "$device" -t 1000 --sync > /dev/null 2>&1
+ 
+diff --git a/package/network/utils/uqmi/Makefile b/package/network/utils/uqmi/Makefile
+--- a/package/network/utils/uqmi/Makefile
++++ b/package/network/utils/uqmi/Makefile
+@@ -2,6 +2,6 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=uqmi
+-PKG_RELEASE:=2
++PKG_RELEASE:=3
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL=$(PROJECT_GIT)/project/uqmi.git
+diff --git a/package/network/utils/uqmi/patches/100-fix-ctl-data-format-request.patch b/package/network/utils/uqmi/patches/100-fix-ctl-data-format-request.patch
+new file mode 100644
+--- /dev/null
++++ b/package/network/utils/uqmi/patches/100-fix-ctl-data-format-request.patch
+@@ -0,0 +1,47 @@
++From: BpiRouter Project <noreply@bpirouter.local>
++Subject: [PATCH] uqmi: send and report the requested CTL data format
++
++The command parsed its argument but built an empty request and returned DONE,
++so no CTL transaction was sent.  Return the protocol acknowledged by the
++modem as a JSON string so netifd can require positive format evidence.
++---
++ uqmi/commands.c | 32 ++++++++++++++++++++++++++++----
++ 1 file changed, 28 insertions(+), 4 deletions(-)
++
++--- a/uqmi/commands.c
+++++ b/uqmi/commands.c
++@@ -148 +148,21 @@
++-#define cmd_ctl_set_data_format_cb no_cb
+++static void
+++cmd_ctl_set_data_format_cb(struct qmi_dev *qmi, struct qmi_request *req, struct qmi_msg *msg)
+++{
+++	struct qmi_ctl_set_data_format_response res;
+++	const char *protocol = "unknown";
+++
+++	qmi_parse_ctl_set_data_format_response(msg, &res);
+++	if (res.set.protocol) {
+++		switch (res.data.protocol) {
+++		case QMI_CTL_DATA_LINK_PROTOCOL_802_3:
+++			protocol = "802.3";
+++			break;
+++		case QMI_CTL_DATA_LINK_PROTOCOL_RAW_IP:
+++			protocol = "raw-ip";
+++			break;
+++		}
+++	}
+++
+++	blobmsg_add_string(&status, NULL, protocol);
+++}
+++
++@@ -152 +172,0 @@
++-	struct qmi_ctl_set_data_format_request sreq = {};
++@@ -164,2 +183,7 @@
+++	struct qmi_ctl_set_data_format_request sreq = {
+++		QMI_INIT(format, QMI_CTL_DATA_FORMAT_QOS_FLOW_HEADER_ABSENT),
+++		QMI_INIT(protocol, mode),
+++	};
+++
++-	qmi_set_ctl_set_data_format_request(msg, &sreq);
++-	return QMI_CMD_DONE;
+++	qmi_set_ctl_set_data_format_request(msg, &sreq);
+++	return QMI_CMD_REQUEST;

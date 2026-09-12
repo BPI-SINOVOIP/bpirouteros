@@ -1,0 +1,24 @@
+A/B: auto-create a ubiblock for the fit-a / fit-b UBI volumes.
+
+openwrt-one boots from UBI via fitblk, which binds to the block device of the
+volume pointed at by /chosen/rootdisk. The kernel only auto-creates a ubiblock
+for volumes named exactly "rootfs" or "fit" (491-ubi-auto-create-ubiblock...),
+but our A/B layout names the two firmware slots fit-a / fit-b. Without a ubiblock
+for fit-a/fit-b, fitblk finds no block device, the root fs never mounts, and the
+kernel panics ("VFS: Cannot open root device"). Extend the auto-create match to
+fit-a / fit-b so the active slot's volume gets a ubiblock that fitblk can bind.
+Both slots get a ubiblock; fitblk uses the one whose of_node matches rootdisk.
+
+--- a/drivers/mtd/ubi/block.c
++++ b/drivers/mtd/ubi/block.c
+@@ -582,7 +582,9 @@ static void ubiblock_create_auto_rootfs(struct ubi_volume_info *vi)
+ 	struct ubi_volume_desc *desc;
+
+ 	if (strcmp(vi->name, "rootfs") &&
+-	    strcmp(vi->name, "fit"))
++	    strcmp(vi->name, "fit") &&
++	    strcmp(vi->name, "fit-a") &&
++	    strcmp(vi->name, "fit-b"))
+ 		return;
+
+ 	desc = ubi_open_volume(vi->ubi_num, vi->vol_id, UBI_READONLY);

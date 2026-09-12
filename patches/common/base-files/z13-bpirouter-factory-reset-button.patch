@@ -1,0 +1,14 @@
+--- a/package/base-files/files/etc/rc.button/reset
++++ b/package/base-files/files/etc/rc.button/reset
+@@ -22,7 +22,9 @@ released)
+ 	elif [ "$SEEN" -ge 5 -a -n "$OVERLAY" ]
+ 	then
+-		echo "FACTORY RESET" > /dev/console
+-		factoryreset -y && reboot &
++		echo "FACTORY RESET REQUEST" > /dev/console
++		/usr/libexec/bpirouter-factory-reset-button || {
++			echo "FACTORY RESET REJECTED" > /dev/console
++		}
+ 	fi
+ ;;
+ esac

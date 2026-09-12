@@ -1,0 +1,370 @@
+diff --git a/package/network/config/netifd/patches/902-bpirouter-protocol-script-lifetime.patch b/package/network/config/netifd/patches/902-bpirouter-protocol-script-lifetime.patch
+new file mode 100644
+--- /dev/null
++++ b/package/network/config/netifd/patches/902-bpirouter-protocol-script-lifetime.patch
+@@ -0,0 +1,365 @@
++diff --git a/netifd.h b/netifd.h
++--- a/netifd.h
+++++ b/netifd.h
++@@ -94,6 +94,8 @@
++ 	struct uloop_process uloop;
++ 	void (*cb)(struct netifd_process *, int ret);
++ 	int dir_fd;
+++	bool script_group;
+++	const char *script_device;
++ 
++ 	struct ustream_fd log;
++ 	const char *log_prefix;
++@@ -110,6 +111,7 @@
++ void netifd_add_process(struct netifd_process *proc, int fd, int pid);
++ int netifd_start_process(const char **argv, char **env, struct netifd_process *proc);
++ void netifd_kill_process(struct netifd_process *proc);
+++void netifd_signal_process(struct netifd_process *proc, int signal);
++ 
++ struct device;
++ struct interface;
++diff --git a/main.c b/main.c
++--- a/main.c
+++++ b/main.c
++@@ -27,6 +27,7 @@
++ #include "proto.h"
++ #include "extdev.h"
++ #include "ucode.h"
+++#include "proto-script.h"
++ 
++ unsigned int debug_mask = 0;
++ const char *main_path = DEFAULT_MAIN_PATH;
++@@ -215,7 +216,7 @@
++ 	if (pipe(pfds) < 0)
++ 		return -1;
++ 
++-	if ((pid = fork()) < 0)
+++	if ((pid = proc->script_group ? netifd_fork_script(proc->script_device) : fork()) < 0)
++ 		goto error;
++ 
++ 	if (!pid) {
++@@ -258,12 +259,24 @@
++ }
++ 
++ void
+++netifd_signal_process(struct netifd_process *proc, int signal)
+++{
+++	if (proc->uloop.pending)
+++		kill(proc->uloop.pid, proc->script_group && signal == SIGKILL ? SIGUSR1 : signal);
+++}
+++
+++void
++ netifd_kill_process(struct netifd_process *proc)
++ {
++ 	if (!proc->uloop.pending)
++ 		return;
++ 
++-	kill(proc->uloop.pid, SIGKILL);
+++	netifd_signal_process(proc, SIGKILL);
+++	/* Destruction/replacement must not free the embedded process record
+++	 * while its script owner still has children. Ordinary teardown uses the
+++	 * asynchronous signal path and lets the existing uloop callback finish. */
+++	if (proc->script_group)
+++		while (waitpid(proc->uloop.pid, NULL, 0) < 0 && errno == EINTR);
++ 	uloop_process_delete(&proc->uloop);
++ 	netifd_delete_process(proc);
++ }
++diff --git a/proto-shell.c b/proto-shell.c
++--- a/proto-shell.c
+++++ b/proto-shell.c
++@@ -175,6 +175,10 @@
++ 	if (cmd == PROTO_CMD_SETUP) {
+++		/* Explicit ifup enables autostart even for auto=0. Close it in
+++		 * netifd before allocation/fork/slot admission can reject the script. */
+++		if (proc->script_group)
+++			proto->iface->autostart = false;
++ 		switch (state->sm) {
++ 		case S_IDLE:
++ 			action = "setup";
++ 			state->last_error = -1;
++ 			proto_shell_clear_host_dep(state);
++@@ -231,20 +235,36 @@
++ 	D(INTERFACE, "run %s for interface '%s'", action, proto->iface->name);
++ 	config = blobmsg_format_json(state->config, true);
++-	if (!config)
++-		return -1;
+++	if (!config) {
+++		ret = -1;
+++		goto out;
+++	}
++ 
++ 	argv[i++] = handler->script_name;
++ 	argv[i++] = handler->proto.name;
++ 	argv[i++] = action;
++ 	argv[i++] = proto->iface->name;
++ 	argv[i++] = config;
++ 	if (proto->iface->main_dev.dev)
++ 		argv[i++] = proto->iface->main_dev.dev->ifname;
++ 	argv[i] = NULL;
+++	if (proc->script_group) {
+++		static const struct blobmsg_policy policy = { .name = "device", .type = BLOBMSG_TYPE_STRING };
+++		struct blob_attr *device;
+++		blobmsg_parse_attr(&policy, 1, &device, state->config);
+++		/* Match qmi.sh/ncm.sh's ctl_device override exactly. */
+++		proc->script_device = proto->iface->main_dev.dev ?
+++			proto->iface->main_dev.dev->ifname :
+++			(device ? blobmsg_get_string(device) : NULL);
+++	}
++ 	envp[j] = NULL;
++ 
++ 	ret = netifd_start_process(argv, envp, proc);
++ 	free(config);
++ 
+++out:
+++	/* No setup child exists on these failures, so no callback can restore
+++	 * idle. A successfully launched owner still completes asynchronously. */
+++	if (ret && proc->script_group && cmd == PROTO_CMD_SETUP)
+++		state->sm = S_IDLE;
++ 	return ret;
++ }
++@@ -354,7 +374,10 @@
++ 
++ 	state = container_of(timeout, struct proto_shell_state, teardown_timeout);
++ 
++-	netifd_kill_process(&state->script_task);
+++	if (state->script_task.script_group)
+++		netifd_signal_process(&state->script_task, SIGKILL);
+++	else
+++		netifd_kill_process(&state->script_task);
++ 	netifd_kill_process(&state->proto_task);
++ 	proto_shell_task_finish(state, NULL);
++ }
++@@ -874,6 +897,7 @@
++ 	state->teardown_timeout.cb = proto_shell_teardown_timeout_cb;
++ 	state->script_task.cb = proto_shell_script_cb;
++ 	state->script_task.dir_fd = proto_fd;
+++	state->script_task.script_group = !strcmp(h->name, "qmi") || !strcmp(h->name, "ncm");
++ 	state->script_task.log_prefix = iface->name;
++ 	state->proto_task.cb = proto_shell_task_cb;
++ 	state->proto_task.dir_fd = proto_fd;
++diff --git a/proto-script.h b/proto-script.h
++new file mode 100644
++--- /dev/null
+++++ b/proto-script.h
++@@ -0,0 +1,96 @@
+++/* QMI/NCM script lifetime: report completion only after its commands exit. */
+++#include <errno.h>
+++#include <signal.h>
+++#include <sys/prctl.h>
+++#include <sys/wait.h>
+++#include <unistd.h>
+++#include "modem-slot.h"
+++
+++static pid_t
+++netifd_fork_script(const char *device)
+++{
+++	sigset_t signals, previous;
+++	struct sigaction action = { .sa_handler = SIG_DFL };
+++	siginfo_t info;
+++	pid_t owner, child, reaped;
+++	int status, result = 127, sig, saved_errno;
+++	struct modem_slot slot;
+++
+++	sigemptyset(&signals);
+++	sigaddset(&signals, SIGCHLD);
+++	sigaddset(&signals, SIGTERM);
+++	sigaddset(&signals, SIGUSR1);
+++	/* Block before the first fork: a termination request must remain pending
+++	 * even before the child replaces netifd's inherited signal handlers. */
+++	if (sigprocmask(SIG_BLOCK, &signals, &previous))
+++		return -1;
+++	owner = fork();
+++	if (owner != 0) {
+++		saved_errno = errno;
+++		sigprocmask(SIG_SETMASK, &previous, NULL);
+++		errno = saved_errno;
+++		return owner;
+++	}
+++	if (sigaction(SIGCHLD, &action, NULL) ||
+++	    sigaction(SIGTERM, &action, NULL) ||
+++	    sigaction(SIGUSR1, &action, NULL) ||
+++	    prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)) {
+++		fprintf(stderr, "netifd: protocol-script-owner: cannot establish child ownership\n");
+++		_exit(127);
+++	}
+++
+++	/* Resolve without modem I/O; only the child waits for the slot. The
+++	 * owner retains this open description until every command is reaped. */
+++	if (modem_slot_open(device, &slot)) {
+++		fprintf(stderr, "netifd: modem-slot-lock: control device is unavailable\n");
+++		_exit(127);
+++	}
+++	child = fork();
+++	if (child < 0)
+++		_exit(127);
+++	if (!child) {
+++		if (setpgid(0, 0) || sigprocmask(SIG_SETMASK, &previous, NULL))
+++			_exit(127);
+++		if (modem_slot_acquire(device, &slot)) {
+++			fprintf(stderr, "netifd: modem-slot-lock: execution admission failed\n");
+++			_exit(127);
+++		}
+++		return 0; /* The caller now prepares and execs the protocol script. */
+++	}
+++	/* Either side may run first. EACCES means the child already exec'd after
+++	 * successfully setting its own group. The child remains ours until wait. */
+++	if (setpgid(child, child) && errno != EACCES)
+++		kill(child, SIGKILL);
+++
+++	for (;;) {
+++		if (waitid(P_PID, child, &info, WEXITED | WNOHANG | WNOWAIT)) {
+++			if (errno == EINTR)
+++				continue;
+++			break;
+++		}
+++		if (info.si_pid)
+++			break;
+++		sig = sigwaitinfo(&signals, NULL);
+++		if (sig == SIGTERM || sig == SIGUSR1)
+++			kill(-child, sig == SIGUSR1 ? SIGKILL : SIGTERM);
+++	}
+++
+++	/* Keep the script leader unreaped until the last group signal. Its PID
+++	 * cannot be reused, even if every command exited just before this call.
+++	 * Protocol commands may not outlive their script, even on normal exit. */
+++	kill(-child, SIGKILL);
+++	for (;;) {
+++		reaped = waitpid(-1, &status, 0);
+++		if (reaped < 0) {
+++			if (errno == EINTR)
+++				continue;
+++			break;
+++		}
+++		if (reaped == child)
+++			result = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+++	}
+++	/* Orphan commands have been adopted and reaped as well as their shell.
+++	 * Do not signal the numeric group again after reaping the leader. */
+++	close(slot.fd); /* Never unlock while a command can still use the fd. */
+++	_exit(result);
+++}
++diff --git a/modem-slot.h b/modem-slot.h
++new file mode 100644
++--- /dev/null
+++++ b/modem-slot.h
++@@ -0,0 +1,120 @@
+++/* Physical USB-slot lock shared with apid's internal/modemlock.
+++ * Never unlink a lock file: queued users must retain the same inode.
+++ * These defaults are compile-time seams for the real-process fixture only. */
+++#include <ctype.h>
+++#include <fcntl.h>
+++#include <limits.h>
+++#include <stdlib.h>
+++#include <string.h>
+++#include <sys/file.h>
+++#include <sys/stat.h>
+++
+++#ifndef MODEM_SYSFS
+++#define MODEM_SYSFS "/sys"
+++#endif
+++#ifndef MODEM_LOCK_ROOT
+++#define MODEM_LOCK_ROOT "/var/run/bpirouter-modem-io"
+++#endif
+++
+++struct modem_slot {
+++	int fd;
+++	char name[NAME_MAX + 1];
+++	unsigned int generation;
+++};
+++
+++static int
+++modem_slot_identity(const char *device, struct modem_slot *slot)
+++{
+++	char node[PATH_MAX], path[PATH_MAX], usb[PATH_MAX], attribute[PATH_MAX];
+++	char *name, *parent;
+++	FILE *fp;
+++	const char *class;
+++
+++	if (!device || !realpath(device, node))
+++		return -1;
+++	name = strrchr(node, '/') + 1;
+++	if (!strncmp(name, "tty", 3))
+++		class = "tty";
+++	else if (!strncmp(name, "cdc-wdm", 7))
+++		class = "usbmisc";
+++	else
+++		return -1;
+++	if (snprintf(path, sizeof(path), "%s/class/%s/%s/device", MODEM_SYSFS, class, name) >= (int)sizeof(path) ||
+++	    !realpath(path, usb))
+++		return -1;
+++	for (;;) {
+++		if (snprintf(attribute, sizeof(attribute), "%s/idVendor", usb) >= (int)sizeof(attribute))
+++			return -1;
+++		if (!access(attribute, F_OK))
+++			break;
+++		parent = strrchr(usb, '/');
+++		if (!parent || parent == usb)
+++			return -1;
+++		*parent = 0;
+++	}
+++	name = strrchr(usb, '/') + 1;
+++	/* A USB device path is bus-port[.port...], not an interface suffix. */
+++	bool dash = false, digit = false;
+++	for (char *p = name; *p; p++) {
+++		if (isdigit((unsigned char)*p)) {
+++			digit = true;
+++			continue;
+++		}
+++		if (!digit || (*p != '-' && *p != '.') || (*p == '-' && dash) || (*p == '.' && !dash))
+++			return -1;
+++		if (*p == '-')
+++			dash = true;
+++		digit = false;
+++	}
+++	if (!dash || !digit || snprintf(slot->name, sizeof(slot->name), "usb_%s", name) >= (int)sizeof(slot->name))
+++		return -1;
+++	for (char *p = slot->name; *p; p++)
+++		if (*p == '-' || *p == '.')
+++			*p = '_';
+++	if (snprintf(attribute, sizeof(attribute), "%s/devnum", usb) >= (int)sizeof(attribute))
+++		return -1;
+++	fp = fopen(attribute, "r");
+++	if (!fp)
+++		return -1;
+++	int scanned = fscanf(fp, "%u", &slot->generation);
+++	fclose(fp);
+++	return scanned == 1 && slot->generation ? 0 : -1;
+++}
+++
+++static int
+++modem_slot_open(const char *device, struct modem_slot *slot)
+++{
+++	char path[PATH_MAX];
+++	struct stat st;
+++
+++	if (modem_slot_identity(device, slot) ||
+++	    (mkdir(MODEM_LOCK_ROOT, 0700) && errno != EEXIST) ||
+++	    snprintf(path, sizeof(path), "%s/%s.lock", MODEM_LOCK_ROOT, slot->name) >= (int)sizeof(path))
+++		return -1;
+++	/* No CLOEXEC: the owner and its script/commands share one lifetime. */
+++	slot->fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW, 0600);
+++	if (slot->fd < 0)
+++		return -1;
+++	if (fstat(slot->fd, &st) || !S_ISREG(st.st_mode)) {
+++		close(slot->fd);
+++		return -1;
+++	}
+++	return 0;
+++}
+++
+++static int
+++modem_slot_acquire(const char *device, struct modem_slot *slot)
+++{
+++	struct modem_slot current;
+++	int result;
+++
+++	do {
+++		result = flock(slot->fd, LOCK_EX);
+++	} while (result && errno == EINTR);
+++	/* A tty name can be reused while this child waits. No old script may
+++	 * start commands against the newly enumerated occupant. */
+++	if (result || modem_slot_identity(device, &current) ||
+++	    strcmp(current.name, slot->name) || current.generation != slot->generation)
+++		return -1;
+++	return 0;
+++}

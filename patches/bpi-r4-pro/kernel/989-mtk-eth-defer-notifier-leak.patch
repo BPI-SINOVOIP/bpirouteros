@@ -1,0 +1,28 @@
+net: ethernet: mtk_eth_soc: unregister netdevice notifier on probe defer
+
+mtk_add_mac() registers a per-MAC netdevice_notifier, but the error path
+taken when mtk_mdio_init() returns -EPROBE_DEFER (e.g. a PHY reset GPIO on a
+not-yet-probed i2c-mux/expander) is err_free_dev -> mtk_free_dev(), which
+only frees the netdevs and never unregisters the notifier. On the deferred
+re-probe mtk_add_mac() then warns "notifier callback mtk_device_event already
+registered" and the probe spins forever, leaving the ethernet dead.
+
+Unregister the notifier in mtk_free_dev() too (mirroring mtk_unreg_dev). The
+err_unreg_netdev path may unregister it first; the second call is a harmless
+no-op (unregister_netdevice_notifier returns -ENOENT for an absent block).
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -4212,8 +4212,13 @@
+ 	int i;
+ 
+ 	for (i = 0; i < MTK_MAX_DEVS; i++) {
++		struct mtk_mac *mac;
++
+ 		if (!eth->netdev[i])
+ 			continue;
++		mac = netdev_priv(eth->netdev[i]);
++		if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA))
++			unregister_netdevice_notifier(&mac->device_notifier);
+ 		free_netdev(eth->netdev[i]);
+ 	}
+ 

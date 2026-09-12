@@ -1,0 +1,8 @@
+# mt7986 (R3 / R3-mini) per-SoC env constants (FIRMWARE_ROLLBACK §10.6.3).
+# Values with $loadaddr / && are single-quoted (u-boot env text, not shell).
+# mt7986 NAND has 0x40000 erase blocks (vs mt7988 0x80000) and a 0x1f000 ubootenv vol.
+LOADADDR=0x46000000
+BOOTARGS_BASE='root=/dev/fit0 rootwait'
+UBOOTENV_VOL=0x1f000
+SNAND_WRITE_BL2='mtd erase bl2 0x0 0x100000 && mtd write bl2 $loadaddr 0x0 0x40000 && mtd write bl2 $loadaddr 0x40000 0x40000 && mtd write bl2 $loadaddr 0x80000 0x40000 && mtd write bl2 $loadaddr 0xc0000 0x40000'
+RESET_FACTORY_SNAND='ubi part ubi ; mw $loadaddr 0xff 0x1f000 ; ubi write $loadaddr ubootenv 0x1f000 ; ubi write $loadaddr ubootenv2 0x1f000'

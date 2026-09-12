@@ -1,0 +1,159 @@
+Provisioning u-boot variant (BROM/UART RAM boot) for openwrt-one.
+
+A dedicated u-boot used ONLY for first install / repair via BROM + mtk_uartboot.
+Unlike the production NAND u-boot (ENV_IS_IN_UBI, A/B boot, reset-button gated
+usb_recover), this one is ENV_IS_NOWHERE so it NEVER reads the (stock/foreign)
+NAND env and always runs its compiled provisioning env. On boot it auto-scans USB
+for snand-factory.bin, CRC-verifies it, writes the whole NAND, verifies the
+readback, and resets into the freshly-flashed firmware -- no button, no commands.
+While no/invalid USB image is present it blinks the red LED and re-scans every few
+seconds (Ctrl-C drops to the prompt; space stops the initial 3s autoboot).
+make-flashkit ships this variant's fip as the BROM payload; the production u-boot
+keeps going into NAND.
+new file mode 100644
+--- /dev/null
++++ b/configs/mt7981_openwrt-one-ram_defconfig
+@@ -0,0 +1,125 @@
++CONFIG_ARM=y
++CONFIG_SYS_HAS_NONCACHED_MEMORY=y
++CONFIG_POSITION_INDEPENDENT=y
++CONFIG_ARCH_MEDIATEK=y
++CONFIG_TEXT_BASE=0x41e00000
++CONFIG_SYS_MALLOC_F_LEN=0x4000
++CONFIG_NR_DRAM_BANKS=1
++CONFIG_DEFAULT_DEVICE_TREE="openwrt-one"
++CONFIG_OF_LIBFDT_OVERLAY=y
++CONFIG_TARGET_MT7981=y
++CONFIG_RESET_BUTTON_LABEL="back"
++CONFIG_SYS_LOAD_ADDR=0x46000000
++CONFIG_DEBUG_UART_BASE=0x11002000
++CONFIG_DEBUG_UART_CLOCK=40000000
++CONFIG_DEBUG_UART=y
++CONFIG_FIT=y
++CONFIG_SPI_BOOT=y
++CONFIG_BOOTDELAY=3
++CONFIG_AUTOBOOT_KEYED=y
++CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_USE_PREBOOT=y
++CONFIG_DEFAULT_FDT_FILE="openwrt-one"
++CONFIG_SYS_CBSIZE=512
++CONFIG_SYS_PBSIZE=1049
++CONFIG_LOGLEVEL=7
++CONFIG_LOG=y
++# CONFIG_BOARD_INIT is not set
++CONFIG_BOARD_LATE_INIT=y
++CONFIG_HUSH_PARSER=y
++CONFIG_SYS_PROMPT="OpenWrt One> "
++CONFIG_SYS_MAXARGS=16
++CONFIG_CMD_CPU=y
++CONFIG_CMD_LICENSE=y
++# CONFIG_BOOTM_NETBSD is not set
++# CONFIG_BOOTM_PLAN9 is not set
++# CONFIG_BOOTM_RTEMS is not set
++# CONFIG_BOOTM_VXWORKS is not set
++# CONFIG_CMD_BOOTEFI_BOOTMGR is not set
++CONFIG_CMD_BOOTMENU=y
++CONFIG_CMD_ASKENV=y
++CONFIG_CMD_ERASEENV=y
++CONFIG_CMD_ENV_FLAGS=y
++CONFIG_CMD_STRINGS=y
++# CONFIG_CMD_UNLZ4 is not set
++# CONFIG_CMD_UNZIP is not set
++CONFIG_CMD_DM=y
++CONFIG_CMD_GPIO=y
++CONFIG_CMD_PWM=y
++CONFIG_CMD_MTD=y
++CONFIG_CMD_PCI=y
++CONFIG_CMD_SF_TEST=y
++CONFIG_CMD_USB=y
++CONFIG_CMD_TFTPSRV=y
++CONFIG_CMD_RARP=y
++CONFIG_CMD_CDP=y
++CONFIG_CMD_SNTP=y
++CONFIG_CMD_LINK_LOCAL=y
++CONFIG_CMD_DHCP=y
++CONFIG_CMD_DNS=y
++CONFIG_CMD_PING=y
++CONFIG_CMD_PXE=y
++CONFIG_CMD_CACHE=y
++CONFIG_CMD_PSTORE=y
++CONFIG_CMD_PSTORE_MEM_ADDR=0x42ff0000
++CONFIG_CMD_UUID=y
++CONFIG_CMD_HASH=y
++CONFIG_CMD_SMC=y
++CONFIG_CMD_FAT=y
++CONFIG_CMD_FS_GENERIC=y
++CONFIG_CMD_FS_UUID=y
++CONFIG_CMD_UBI=y
++CONFIG_CMD_UBI_RENAME=y
++CONFIG_ENV_OVERWRITE=y
++CONFIG_ENV_RELOC_GD_ENV_ADDR=y
++CONFIG_ENV_IS_NOWHERE=y
++CONFIG_ENV_USE_DEFAULT_ENV_TEXT_FILE=y
++CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="defenvs/openwrt-one-ram_env"
++CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG=y
++CONFIG_VERSION_VARIABLE=y
++CONFIG_NET_RANDOM_ETHADDR=y
++CONFIG_BUTTON=y
++CONFIG_BUTTON_GPIO=y
++CONFIG_CLK=y
++CONFIG_GPIO_HOG=y
++CONFIG_LED=y
++CONFIG_LED_BLINK=y
++CONFIG_LED_GPIO=y
++# CONFIG_MMC is not set
++CONFIG_MTD=y
++CONFIG_DM_MTD=y
++CONFIG_MTD_SPI_NAND=y
++CONFIG_DM_SPI_FLASH=y
++CONFIG_SPI_FLASH_SFDP_SUPPORT=y
++CONFIG_SPI_FLASH_EON=y
++CONFIG_SPI_FLASH_GIGADEVICE=y
++CONFIG_SPI_FLASH_ISSI=y
++CONFIG_SPI_FLASH_MACRONIX=y
++CONFIG_SPI_FLASH_SPANSION=y
++CONFIG_SPI_FLASH_STMICRO=y
++CONFIG_SPI_FLASH_WINBOND=y
++CONFIG_SPI_FLASH_XMC=y
++CONFIG_SPI_FLASH_XTX=y
++CONFIG_SPI_FLASH_MTD=y
++CONFIG_PHY_FIXED=y
++CONFIG_MEDIATEK_ETH=y
++CONFIG_PHY=y
++CONFIG_PHY_MTK_TPHY=y
++CONFIG_PINCTRL=y
++CONFIG_PINCONF=y
++CONFIG_PINCTRL_MT7981=y
++CONFIG_POWER_DOMAIN=y
++CONFIG_MTK_POWER_DOMAIN=y
++CONFIG_DM_PWM=y
++CONFIG_PWM_MTK=y
++CONFIG_DM_SERIAL=y
++CONFIG_SERIAL_RX_BUFFER=y
++CONFIG_MTK_SERIAL=y
++CONFIG_SPI=y
++CONFIG_DM_SPI=y
++CONFIG_MTK_SPIM=y
++CONFIG_USB=y
++CONFIG_USB_XHCI_HCD=y
++CONFIG_USB_XHCI_MTK=y
++CONFIG_USB_STORAGE=y
++CONFIG_HEXDUMP=y
+new file mode 100644
+--- /dev/null
++++ b/defenvs/openwrt-one-ram_env
+@@ -0,0 +1,13 @@
++ipaddr=10.1.1.3
++serverip=10.1.1.1
++loadaddr=0x46000000
++usb_pgood_delay=4000
++bootdelay=3
++bootfile_factory=snand-factory.bin
++bootfile_factory_crc=snand-factory.crc
++usb_image=usb start ; if fatload usb 0 $loadaddr $bootfile_factory ; then setenv imgsz $filesize ; else usb reset ; if fatload usb 0 $loadaddr $bootfile_factory ; then setenv imgsz $filesize ; else setenv imgsz 0 ; fi ; fi ; test "$imgsz" != 0 && fatload usb 0 0x4f000000 $bootfile_factory_crc
++verify_src=crc32 $loadaddr $imgsz 0x4f000004 && cmp.b 0x4f000000 0x4f000004 0x4
++verify_nand=mtd read spi-nand0 0x4e000000 0x0 $imgsz && cmp.b $loadaddr 0x4e000000 $imgsz
++flash_nand=led white on ; led green on ; led orange on ; run verify_src && mtd erase spi-nand0 && mtd write spi-nand0 $loadaddr 0x0 $imgsz && run verify_nand
++provision=if run usb_image ; then if run flash_nand ; then led white off ; led orange off ; led green on ; echo "*** PROVISION OK - booting NAND ***" ; reset ; else led white off ; led green off ; led orange off ; echo "*** flash/verify FAILED - check USB image ***" ; fi ; fi
++bootcmd=led green off ; led white off ; echo "*** provisioning: insert USB with snand-factory.bin (Ctrl-C for prompt) ***" ; while true ; do run provision ; led orange on ; sleep 1 ; led orange off ; sleep 2 ; done
+\ No newline at end of file

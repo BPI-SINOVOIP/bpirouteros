@@ -1,0 +1,82 @@
+#!/bin/sh
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# Bring /etc/config/mwan3 to BpiRouter's canonical state on first boot.
+#
+# mwan3 is one of the two configs the product manages as a WHOLE FILE (sqm is
+# the other): fwmark allocation and policy routing are global, so a second
+# writer does not add an independent policy, it produces an undefined routing
+# plane.  The backend therefore refuses to serve any mwan3 state it did not
+# write, and that refusal is only safe if the shipped state is a product state.
+#
+# The decision is "is this OURS", not "is this that one known upstream file".
+# The previous frozen-stock-hash form broke in two ways: one upstream byte
+# change turned every board's first boot into a hard failure, and every other
+# source of foreign state (LuCI, a hand-edit, an older product revision) was
+# preserved into a permanently unserviceable multi-WAN with no in-product way
+# out.  The strict reader decides instead:
+#
+#   product state (including the canonical globals-only state) -> keep, 0 writes
+#   anything else                                              -> reset
+#
+# Resetting foreign content is legitimate only because the product owns this
+# file exclusively: the LuCI mwan3 app is not shipped, so reaching it means
+# going around the product's management plane on purpose.
+
+umask 077
+
+# Self-check on what this script writes, not a fingerprint of any upstream file.
+CANONICAL_SHA256='35797aa08561f243a8319d31c726980f94592e420ca1f3d9306a822aea3eab26'
+CONFIG=${BPIR_MWAN3_CONFIG:-/etc/config/mwan3}
+LOGGER=${BPIR_LOGGER_BIN:-logger}
+STRICT_AWK=${BPIR_MWAN3_STRICT_AWK:-/usr/libexec/bpirouter-mwan3-strict.awk}
+
+fail() {
+	"$LOGGER" -t bpirouter-mwan3-canonical -- "$1" 2>/dev/null || true
+	printf '%s\n' "bpirouter-mwan3-canonical: $1" >&2
+	exit 1
+}
+
+[ -f "$CONFIG" ] || fail "mwan3 config is missing or not a regular file"
+[ ! -L "$CONFIG" ] || fail "refusing symlinked mwan3 config"
+[ -f "$STRICT_AWK" ] && [ ! -L "$STRICT_AWK" ] || fail "strict mwan3 reader is unavailable"
+
+# A product state -- the canonical empty one, or a live multi-WAN projection
+# this device is already routing with -- is left byte-for-byte alone, inode
+# included.  uci-defaults reruns after a config-preserving sysupgrade, and
+# rewriting here would silently delete the user's multi-WAN setup every upgrade.
+if { printf '%s\n' "package 'mwan3'"; cat "$CONFIG"; } | awk -f "$STRICT_AWK"; then
+	exit 0
+fi
+
+dir=${CONFIG%/*}
+base=${CONFIG##*/}
+[ "$dir" != "$CONFIG" ] || dir=.
+[ -d "$dir" ] || fail "mwan3 config directory is missing"
+
+tmp=$(mktemp "$dir/.${base}.bpirouter.XXXXXX") || fail "cannot create private replacement"
+cleanup() { [ -z "$tmp" ] || rm -f "$tmp"; }
+trap cleanup EXIT HUP INT TERM
+
+cat >"$tmp" <<'EOF'
+config globals 'globals'
+	option mmx_mask '0x3F00'
+	option bpir_managed '1'
+EOF
+chmod 0600 "$tmp" || fail "cannot protect replacement"
+
+replacement=$(sha256sum "$tmp" 2>/dev/null) || fail "cannot hash replacement"
+replacement=${replacement%%[[:space:]]*}
+[ "$replacement" = "$CANONICAL_SHA256" ] || fail "embedded canonical state failed its hash contract"
+
+"$LOGGER" -t bpirouter-mwan3-canonical -- \
+	"replacing non-product mwan3 state with the canonical empty state" 2>/dev/null || true
+
+mv -f "$tmp" "$CONFIG" || fail "cannot publish canonical mwan3 state"
+tmp=
+
+readback=$(sha256sum "$CONFIG" 2>/dev/null) || fail "cannot read back canonical mwan3 state"
+readback=${readback%%[[:space:]]*}
+[ "$readback" = "$CANONICAL_SHA256" ] || fail "canonical mwan3 readback mismatch"
+
+trap - EXIT HUP INT TERM
+exit 0

@@ -1,0 +1,55 @@
+net: phy: as21xxx: read c45 regs twice on MediaTek MDIO
+
+AS21xxx has no .get_features/.config_init, so phylib fills supported via
+genphy_c45_pma_read_abilities -> phy_read_mmd -> as21xxx_read_mmd. MediaTek's
+MDIO mis-reads this PHY's c45 regs one beat off; the airoha single
+read-then-write (985) returns stale data, so PMA abilities read as 0 and
+phy->supported collapses to pause-only -> usxgmii validate fails 0x6000 ->
+eth1 cannot attach. Make as21xxx_read_mmd read twice (second read aligned),
+and apply the same read-twice workaround inline in the match path (the
+driver read_mmd is not bound yet during as21xxx_match_phy_device).
+--- a/drivers/net/phy/as21xxx.c
++++ b/drivers/net/phy/as21xxx.c
+@@ -913,13 +913,22 @@
+ 				   PHY_VENDOR_AEONSEMI))
+ 		return genphy_match_phy_device(phydev, phydrv);
+ 
+-	/* Read PHY ID to handle firmware loaded or HW reset */
++	/* Read PHY ID to handle firmware loaded or HW reset. Match runs
++	 * before the driver (and its read_mmd) is bound, so apply the MTK
++	 * read-twice c45 workaround inline here too. */
++	mdiobus_write(phydev->mdio.bus, 0x0, MII_BMSR, 0x1);
++	phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
++	mdiobus_write(phydev->mdio.bus, 0x0, MII_BMSR, 0x1);
+ 	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID1);
++	mdiobus_write(phydev->mdio.bus, 0x0, MII_BMSR, 0x1);
+ 	if (ret < 0)
+ 		return ret;
+ 	phy_id = ret << 16;
+ 
++	phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
++	mdiobus_write(phydev->mdio.bus, 0x0, MII_BMSR, 0x1);
+ 	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_PHYSID2);
++	mdiobus_write(phydev->mdio.bus, 0x0, MII_BMSR, 0x1);
+ 	if (ret < 0)
+ 		return ret;
+ 	phy_id |= ret;
+@@ -973,10 +982,14 @@
+ 	struct mii_bus *bus = phydev->mdio.bus;
+ 	int val;
+ 
+-	val = __mdiobus_c45_read(bus, phydev->mdio.addr, devad,
+-				 regnum);
+-
+-	/* FIXME: verify if it's actually ok to limit this to MII_BMSR */
++	/* MediaTek MDIO mis-reads this PHY's c45 registers one beat off: a
++	 * read returns the previous transaction's data, so a single read
++	 * (even with a trailing dummy write) yields stale values. Read twice
++	 * with a dummy BMSR write around each; the second read is aligned.
++	 * airoha's single read-then-write is not enough on MediaTek. */
++	__mdiobus_c45_read(bus, phydev->mdio.addr, devad, regnum);
++	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
++	val = __mdiobus_c45_read(bus, phydev->mdio.addr, devad, regnum);
+ 	__mdiobus_write(bus, 0x0, MII_BMSR, 0x1);
+ 
+ 	return val;

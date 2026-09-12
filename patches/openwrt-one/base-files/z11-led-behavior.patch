@@ -1,0 +1,58 @@
+LED behaviour: clear status indication on the three front LEDs (openwrt-one).
+
+The board has three status LEDs — warm-white (pwm0/pin13), green (pwm1/pin15) and
+amber (gpio/pin9, mislabelled "red" upstream). Stock config left them mostly dark:
+white ran a barely-visible dim pattern (<0 500 25 500>), green/amber had no trigger.
+
+New scheme (warm-white = powered/running, green = alive heartbeat, amber = attention):
+- white: default-on  -> solid whenever Linux is up (the power/run light).
+- green: heartbeat    -> pulses while running ("alive & healthy"); led-upgrade alias
+  makes it blink fast during sysupgrade (white stays solid).
+- amber: relabelled from RED to AMBER (matches the schematic); led-failsafe alias.
+Drop led-boot / led-running aliases — the default-on / heartbeat triggers cover the
+run state directly, without diag.sh forcing them solid. The amber "OTA pending /
+recovery" slow-blink is driven separately (backend / u-boot env).
+LAN LEDs (pin34/35) unchanged.
+
+diff --git a/target/linux/mediatek/dts/mt7981b-openwrt-one.dts b/target/linux/mediatek/dts/mt7981b-openwrt-one.dts
+index 173054b..bd953a2 100644
+--- a/target/linux/mediatek/dts/mt7981b-openwrt-one.dts
++++ b/target/linux/mediatek/dts/mt7981b-openwrt-one.dts
+@@ -10,9 +10,7 @@
+ 	aliases {
+ 		ethernet0 = &gmac1;
+ 		label-mac-device = &gmac0;
+-		led-boot = &led_status_white;
+-		led-failsafe = &led_status_red;
+-		led-running = &led_status_green;
++		led-failsafe = &led_status_amber;
+ 		led-upgrade = &led_status_green;
+ 		serial0 = &uart0;
+ 	};
+@@ -68,22 +66,22 @@
+ 			color = <LED_COLOR_ID_WHITE>;
+ 			function = LED_FUNCTION_STATUS;
+ 			pwms = <&pwm 0 10000>;
+-			linux,default-trigger = "pattern";
+-			led-pattern = <0 500 25 500>;
++			linux,default-trigger = "default-on";
+ 		};
+ 
+ 		led_status_green: led-1 {
+ 			color = <LED_COLOR_ID_GREEN>;
+ 			function = LED_FUNCTION_STATUS;
+ 			pwms = <&pwm 1 10000>;
++			linux,default-trigger = "heartbeat";
+ 		};
+ 	};
+ 
+ 	gpio-leds {
+ 		compatible = "gpio-leds";
+ 
+-		led_status_red: led-0 {
+-			color = <LED_COLOR_ID_RED>;
++		led_status_amber: led-0 {
++			color = <LED_COLOR_ID_AMBER>;
+ 			function = LED_FUNCTION_STATUS;
+ 			gpios = <&pio 9 GPIO_ACTIVE_HIGH>;
+ 		};

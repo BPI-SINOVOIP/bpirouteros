@@ -1,0 +1,36 @@
+A/B autoboot (mt7986 / R3): fast boot + space-to-stop instead of the 30s menu.
+
+Mirror of bpi-r4 z01 for R3's three media defconfigs (emmc/sd/snand): BOOTDELAY
+30 -> 1 and AUTOBOOT_MENU_SHOW -> AUTOBOOT_STOP_STR (space). z02 (bootcount)
+builds on the AUTOBOOT_STOP_STR line this adds.
+
+--- a/configs/mt7986a_bpi-r3-emmc_defconfig
++++ b/configs/mt7986a_bpi-r3-emmc_defconfig
+@@ -21,5 +21,5 @@
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+--- a/configs/mt7986a_bpi-r3-sd_defconfig
++++ b/configs/mt7986a_bpi-r3-sd_defconfig
+@@ -21,5 +21,5 @@
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+--- a/configs/mt7986a_bpi-r3-snand_defconfig
++++ b/configs/mt7986a_bpi-r3-snand_defconfig
+@@ -18,5 +18,5 @@
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y

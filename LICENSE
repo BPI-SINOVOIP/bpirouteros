@@ -1,0 +1,79 @@
+BpiRouter Build System — Licence
+
+Copyright (c) 2026 Ning.
+Contact: mimallaus@gmail.com
+
+⚠️ THIS REPOSITORY IS MIXED-LICENCE. Read LICENSING.md first.
+
+The terms below apply ONLY to the parts of this repository identified as
+proprietary in LICENSING.md. They do NOT apply to, and cannot restrict:
+
+  - patches/**        modifications to Linux, U-Boot, ARM Trusted Firmware and
+                      OpenWrt, which remain under their upstream licences;
+  - scripts/**        the scripts that control compilation and installation,
+                      which GNU GPL v2 section 3 requires to be provided as part
+                      of the corresponding source;
+  - config/**         and env-templates/**, for the same reason;
+  - flashkit/         the vendored mtk_uartboot (AGPL-3.0-only) and its source.
+
+Those parts are licensed under their own terms. Nothing in this file adds any
+further restriction to them, because GNU GPL v2 section 6 does not permit it.
+
+
+1. SCOPE (PROPRIETARY CONTENT ONLY)
+
+Permission is granted, free of charge, to individuals, developers and
+educational institutions to use the proprietary content of this repository
+(as listed in LICENSING.md — currently docs/, flashkit/RUNBOOK-*.md and
+the original repository README.md) for personal, non-commercial research and internal testing.
+
+
+2. COMMERCIAL RESTRICTIONS (PROPRIETARY CONTENT ONLY)
+
+Without prior written authorisation from the copyright holder, you may not use
+the proprietary content listed above for commercial sale, distribution or a
+profit-making service, nor create white-labelled or derivative commercial
+products from it.
+
+This clause does not, and cannot, restrict what you may do with the firmware
+images, the patches, the build scripts or the configuration — those carry their
+own licences, and the freedoms they grant include commercial use and
+redistribution.
+
+
+3. TRADEMARKS AND BRANDING
+
+The BpiRouter name, logo and brand identifiers are not licensed by this or any
+other software licence in this repository. Copyright licences, including the
+GPL, do not grant trademark rights, so reserving them creates no conflict.
+
+You may not present a derivative product as a BpiRouter product, or retain our
+branding on one, without written authorisation. This restricts the use of our
+marks; it does not restrict modifying or redistributing any GPL-covered code.
+
+
+4. FREE SOFTWARE OBLIGATIONS
+
+Firmware built from this repository contains software under the GNU General
+Public License and other free software licences. The copyright holder provides
+the complete corresponding source code for those components as described in
+the README supplied with this source.
+
+If any term in this file were ever read as conflicting with an obligation under
+those licences, the free software licence prevails and this file is to be read
+as not applying to the material in question.
+
+
+5. OEM AND COMMERCIAL LICENSING
+
+For commercial rights to the proprietary content, removal of brand
+restrictions, or OEM development, contact the copyright holder.
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,0 +1,44 @@
+#!/bin/sh
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# Product v1.5 forbids both nftables flow-offload tiers. This script owns only
+# the two options below; every other firewall option and section is preserved.
+
+UCI=${BPIR_UCI_BIN:-uci}
+LOGGER=${BPIR_LOGGER_BIN:-/usr/bin/logger}
+
+fail() {
+	"$LOGGER" -t bpirouter-offload-disabled -- "$1" 2>/dev/null || true
+	printf '%s\n' "bpirouter-offload-disabled: $1" >&2
+	exit 1
+}
+
+defaults_count=$("$UCI" -q show firewall 2>/dev/null |
+	awk -F= '$2 == "defaults" { n++ } END { print n + 0 }') ||
+	fail "cannot enumerate firewall defaults"
+[ "$defaults_count" -eq 1 ] ||
+	fail "firewall must contain exactly one defaults section"
+
+software=$("$UCI" -q get firewall.@defaults[0].flow_offloading 2>/dev/null || true)
+hardware=$("$UCI" -q get firewall.@defaults[0].flow_offloading_hw 2>/dev/null || true)
+
+case "$software" in ''|0|1) ;; *) fail "flow_offloading has an unsupported value" ;; esac
+case "$hardware" in ''|0|1) ;; *) fail "flow_offloading_hw has an unsupported value" ;; esac
+
+[ "$software" = 0 ] && [ "$hardware" = 0 ] && exit 0
+
+"$UCI" -q set firewall.@defaults[0].flow_offloading=0 ||
+	fail "cannot stage software flow offload disabled"
+"$UCI" -q set firewall.@defaults[0].flow_offloading_hw=0 || {
+	"$UCI" -q revert firewall >/dev/null 2>&1 || true
+	fail "cannot stage hardware flow offload disabled"
+}
+"$UCI" -q commit firewall || {
+	"$UCI" -q revert firewall >/dev/null 2>&1 || true
+	fail "cannot commit the firewall offload invariant"
+}
+
+[ "$("$UCI" -q get firewall.@defaults[0].flow_offloading 2>/dev/null)" = 0 ] &&
+	[ "$("$UCI" -q get firewall.@defaults[0].flow_offloading_hw 2>/dev/null)" = 0 ] ||
+	fail "firewall offload invariant readback mismatch"
+
+exit 0

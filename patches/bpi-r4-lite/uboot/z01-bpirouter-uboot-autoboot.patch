@@ -1,0 +1,47 @@
+A/B autoboot (mt7987 / R4-Lite): fast boot + space-to-stop instead of the menu.
+
+Mirror of bpi-r4 z01 for R4-Lite's three media defconfigs (emmc/sd/snand).
+Upstream mt7987 ships only CONFIG_AUTOBOOT_MENU_SHOW (no BOOTDELAY / KEYED),
+so replace it with BOOTDELAY=1 + AUTOBOOT_KEYED + AUTOBOOT_STOP_STR (space)
+for an unattended 1s boot interruptible from serial. z02 (bootcount) builds
+on the AUTOBOOT_STOP_STR line this adds.
+
+--- a/configs/mt7987a_bpi-r4-lite-emmc_defconfig
++++ b/configs/mt7987a_bpi-r4-lite-emmc_defconfig
+@@ -16,7 +16,9 @@
+ CONFIG_DEBUG_UART_CLOCK=40000000
+ CONFIG_DEBUG_UART=y
+ CONFIG_FIT=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_BOOTDELAY=1
++CONFIG_AUTOBOOT_KEYED=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_DEFAULT_FDT_FILE="mt7987a-bpi-r4-lite-emmc"
+ CONFIG_SYS_CBSIZE=512
+ CONFIG_SYS_PBSIZE=1049
+--- a/configs/mt7987a_bpi-r4-lite-sd_defconfig
++++ b/configs/mt7987a_bpi-r4-lite-sd_defconfig
+@@ -16,7 +16,9 @@
+ CONFIG_DEBUG_UART_CLOCK=40000000
+ CONFIG_DEBUG_UART=y
+ CONFIG_FIT=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_BOOTDELAY=1
++CONFIG_AUTOBOOT_KEYED=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_DEFAULT_FDT_FILE="mt7987a-bpi-r4-lite-sd"
+ CONFIG_SYS_CBSIZE=512
+ CONFIG_SYS_PBSIZE=1049
+--- a/configs/mt7987a_bpi-r4-lite-snand_defconfig
++++ b/configs/mt7987a_bpi-r4-lite-snand_defconfig
+@@ -16,7 +16,9 @@
+ CONFIG_DEBUG_UART_CLOCK=40000000
+ CONFIG_DEBUG_UART=y
+ CONFIG_FIT=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_BOOTDELAY=1
++CONFIG_AUTOBOOT_KEYED=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_DEFAULT_FDT_FILE="mt7987a-bpi-r4-lite-emmc-spim-nand"
+ CONFIG_SYS_CBSIZE=512
+ CONFIG_SYS_PBSIZE=1049

@@ -1,0 +1,44 @@
+A/B: env-backed u-boot bootcount on R4-Lite (mt7987), foundation for A/B rollback.
+
+Mirror of bpi-r4 z02. Adds BOOTCOUNT_LIMIT/ENV/ALTBOOTCMD to R4-Lite's three
+media defconfigs, after the AUTOBOOT_STOP_STR line z01 adds. The counter is
+gated by the `upgrade_available` env var, so steady-state boots neither count
+nor write flash; once it exceeds `bootlimit`, autoboot runs altbootcmd (slot
+switch).
+
+--- a/configs/mt7987a_bpi-r4-lite-emmc_defconfig
++++ b/configs/mt7987a_bpi-r4-lite-emmc_defconfig
+@@ -19,6 +19,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_DEFAULT_FDT_FILE="mt7987a-bpi-r4-lite-emmc"
+ CONFIG_SYS_CBSIZE=512
+ CONFIG_SYS_PBSIZE=1049
+--- a/configs/mt7987a_bpi-r4-lite-sd_defconfig
++++ b/configs/mt7987a_bpi-r4-lite-sd_defconfig
+@@ -19,6 +19,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_DEFAULT_FDT_FILE="mt7987a-bpi-r4-lite-sd"
+ CONFIG_SYS_CBSIZE=512
+ CONFIG_SYS_PBSIZE=1049
+--- a/configs/mt7987a_bpi-r4-lite-snand_defconfig
++++ b/configs/mt7987a_bpi-r4-lite-snand_defconfig
+@@ -19,6 +19,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_DEFAULT_FDT_FILE="mt7987a-bpi-r4-lite-emmc-spim-nand"
+ CONFIG_SYS_CBSIZE=512
+ CONFIG_SYS_PBSIZE=1049

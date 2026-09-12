@@ -1,0 +1,36 @@
+A/B autoboot (mt7986 / R3-mini): fast boot + space-to-stop instead of the 30s menu.
+
+Ported from bpi-r3 z01 for R3-mini's two media defconfigs (emmc/snand; R3-mini
+has no SD/NOR u-boot variant). BOOTDELAY 30 -> 1 and AUTOBOOT_MENU_SHOW ->
+AUTOBOOT_STOP_STR (space). z02 (bootcount) builds on the AUTOBOOT_STOP_STR line
+this adds. mt7986a_bpi-r3-mini-{emmc,snand} share R3's defconfig layout so the
+hunks are identical to bpi-r3's, only the filenames differ.
+
+--- a/configs/mt7986a_bpi-r3-mini-emmc_defconfig
++++ b/configs/mt7986a_bpi-r3-mini-emmc_defconfig
+@@ -19,9 +19,9 @@
+ CONFIG_DEBUG_UART=y
+ CONFIG_AHCI=y
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7986a-bpi-r3-mini.dtb"
+ CONFIG_LOGLEVEL=7
+--- a/configs/mt7986a_bpi-r3-mini-snand_defconfig
++++ b/configs/mt7986a_bpi-r3-mini-snand_defconfig
+@@ -16,9 +16,9 @@
+ CONFIG_DEBUG_UART=y
+ CONFIG_AHCI=y
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7986a-bpi-r3-mini.dtb"
+ CONFIG_LOGLEVEL=7

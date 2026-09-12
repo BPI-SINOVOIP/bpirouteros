@@ -1,0 +1,29 @@
+A/B: declare the second eMMC slot partition + rootdisk phandles (mt7986/R3-mini).
+
+Adds a `production_b` block-partition node and /chosen rootdisk-emmc-a/-b phandles
+(referencing emmc_rootdisk / emmc_rootdisk_b) so 311+z03 ft_system_setup can point
+/chosen/rootdisk at the active slot. r3-mini's DTS is a single base .dts in
+target/linux/mediatek/dts/ (DEVICE_DTS_DIR=../dts, like r4-lite) -> base-files
+patch via `git apply` (strict/atomic; two well-separated hunks are safe here, no
+quilt silent-drop). chosen and partitions are ~250 lines apart -> two hunks.
+--- a/target/linux/mediatek/dts/mt7986a-bananapi-bpi-r3-mini.dts
++++ b/target/linux/mediatek/dts/mt7986a-bananapi-bpi-r3-mini.dts
+@@ -30,6 +30,8 @@
+ 	chosen {
+ 		stdout-path = "serial0:115200n8";
+ 		rootdisk-emmc = <&emmc_rootdisk>;
++		rootdisk-emmc-a = <&emmc_rootdisk>;
++		rootdisk-emmc-b = <&emmc_rootdisk_b>;
+ 		rootdisk-spim-nand = <&nand_rootdisk>;
+ 	};
+ 
+@@ -283,6 +285,9 @@
+ 				emmc_rootdisk: block-partition-production {
+ 					partname = "production";
+ 				};
++				emmc_rootdisk_b: block-partition-production_b {
++					partname = "production_b";
++				};
+ 			};
+ 		};
+ 	};

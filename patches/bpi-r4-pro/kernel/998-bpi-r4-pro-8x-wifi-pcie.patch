@@ -1,0 +1,50 @@
+arm64: dts: r4-pro: enable PCIe + PHYs (Wi-Fi MT7996 + M.2/mPCIe)
+
+r4-pro platform bring-up was minimal-net-only with no PCIe. Enable pcie0-3
+AND the PCIe PHYs (&tphy for pcie0/1/3, &xsphy for pcie2) -- the SoC 031/171
+nodes default to disabled, so without the PHYs the controllers deferred-probe
+and nothing enumerates (R4 does the same in patches 040/172). MT7996 (BE14)
+auto-probes on pcie0 via PCIe with kmod-mt7996e + firmware; no DT mt7996 node
+(card efuse calibration, as on R4). pcie1/2/3 = mPCIe/M.2 slots.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -336,6 +336,38 @@
+ 	};
+ };
+ 
++&pcie0 {
++	/* mPCIe SIM2 — MT7996 Wi-Fi (BE14) auto-probes over PCIe; calibration
++	 * from the module efuse (no on-board factory partition). */
++	status = "okay";
++};
++
++&pcie1 {
++	/* mPCIe SIM3 */
++	status = "okay";
++};
++
++&pcie2 {
++	/* M.2 key-B SIM1 */
++	status = "okay";
++};
++
++&pcie3 {
++	/* M.2 key-M (NVMe SSD) */
++	status = "okay";
++};
++
++&tphy {
++	/* PCIe t-phy for pcie0/1/3 — without it the controllers deferred-probe
++	 * and nothing enumerates (same as R4 patch 040). */
++	status = "okay";
++};
++
++&xsphy {
++	/* PCIe2 xs-phy (shared with ssusb0) — R4 patch 172. */
++	status = "okay";
++};
++
+ &i2c2 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&i2c2_1_pins>;

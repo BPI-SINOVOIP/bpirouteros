@@ -1,0 +1,99 @@
+board: mt7988: r4-pro: pulse both 10G PHY resets in board_late_init
+
+The 10G WAN and LAN PHYs (Aeonsemi AS21010P @ MDIO 0x1c and 0x18) load their
+firmware from the host (Linux). On a cold boot Linux scans POR'd PHYs (generic
+c45 ids), loads the firmware and binds AS21010PB1 with clean USXGMII
+datapaths. On a warm reboot the firmware stays resident and the PHY system
+sides can remain desynchronised from the freshly reset MAC/switch PCS.
+
+phylib cannot re-reset the PHY here: as21xxx sets PHY_DETACH_NO_HW_RESET and,
+in this 6.12 flow, the reset-gpios are only ever acquired deasserted
+(GPIOD_OUT_LOW) and mdio_device_reset() is a no-op when already deasserted, so
+no clean reset+firmware-reload happens. Pulsing both PHY resets in u-boot makes
+Linux always probe freshly reset PHYs, recreating the cold-boot path on every
+boot. The resets are GPIO82 (WAN) and GPIO83 (LAN) per the 8X schematic; the
+pins are referenced by phandle so no gpio numbering assumptions are made.
+--- a/board/mediatek/mt7988/mt7988_rfb.c
++++ b/board/mediatek/mt7988/mt7988_rfb.c
+@@ -11,6 +11,7 @@
+ #include <init.h>
+ #include <asm/global_data.h>
+ #include <asm/io.h>
++#include <asm/gpio.h>
+ #include <linux/delay.h>
+ #include <linux/libfdt.h>
+ 
+@@ -37,6 +38,60 @@
+ 			gd->env_valid = ENV_INVALID;
+ 		}
+ 	}
++	/* r4-pro: pulse both AS21010P PHY resets so Linux always probes freshly
++	 * reset generic-c45 devices and reloads their firmware. On a warm reboot
++	 * their USXGMII system sides can otherwise remain desynchronised from the
++	 * freshly reset MAC/switch PCS. phylib cannot provide this reset because
++	 * as21xxx sets PHY_DETACH_NO_HW_RESET. */
++	{
++		struct gpio_desc wan_phy_rst;
++		int assert_ret;
++		int ret;
++
++		ret = gpio_request_by_name_nodev(ofnode_path("/"),
++						 "bpir,wan-phy-reset-gpios", 0,
++						 &wan_phy_rst, GPIOD_IS_OUT);
++		if (ret) {
++			printf("r4-pro: failed to request 10G WAN PHY reset GPIO: %d\n", ret);
++		} else {
++			assert_ret = dm_gpio_set_value(&wan_phy_rst, 1);
++			if (assert_ret)
++				printf("r4-pro: failed to assert 10G WAN PHY reset: %d\n", assert_ret);
++			else
++				mdelay(20);
++			ret = dm_gpio_set_value(&wan_phy_rst, 0);
++			if (ret)
++				printf("r4-pro: failed to deassert 10G WAN PHY reset: %d\n", ret);
++			else if (!assert_ret)
++				printf("r4-pro: pulsed 10G WAN PHY reset (GPIO82)\n");
++			dm_gpio_free(wan_phy_rst.dev, &wan_phy_rst);
++		}
++	}
++	{
++		struct gpio_desc lan_phy_rst;
++		int assert_ret;
++		int ret;
++
++		ret = gpio_request_by_name_nodev(ofnode_path("/"),
++						 "bpir,lan-phy-reset-gpios", 0,
++						 &lan_phy_rst, GPIOD_IS_OUT);
++		if (ret) {
++			printf("r4-pro: failed to request 10G LAN PHY reset GPIO: %d\n", ret);
++		} else {
++			assert_ret = dm_gpio_set_value(&lan_phy_rst, 1);
++			if (assert_ret)
++				printf("r4-pro: failed to assert 10G LAN PHY reset: %d\n", assert_ret);
++			else
++				mdelay(20);
++			ret = dm_gpio_set_value(&lan_phy_rst, 0);
++			if (ret)
++				printf("r4-pro: failed to deassert 10G LAN PHY reset: %d\n", ret);
++			else if (!assert_ret)
++				printf("r4-pro: pulsed 10G LAN PHY reset (GPIO83)\n");
++			dm_gpio_free(lan_phy_rst.dev, &lan_phy_rst);
++		}
++	}
++
+ 	env_relocate();
+ 	return 0;
+ }
+--- a/arch/arm/dts/mt7988a-bananapi-bpi-r4-pro-8x.dtsi
++++ b/arch/arm/dts/mt7988a-bananapi-bpi-r4-pro-8x.dtsi
+@@ -13,6 +13,10 @@
+ 	model = "Bananapi BPI-R4 Pro 8X";
+ 	compatible = "bananapi,bpi-r4-pro-8x", "mediatek,mt7988";
+ 
++	/* 10G PHY resets, pulsed in board_late_init */
++	bpir,wan-phy-reset-gpios = <&pio 82 GPIO_ACTIVE_LOW>;
++	bpir,lan-phy-reset-gpios = <&pio 83 GPIO_ACTIVE_LOW>;
++
+ 	chosen {
+ 		stdout-path = &uart0;
+ 	};

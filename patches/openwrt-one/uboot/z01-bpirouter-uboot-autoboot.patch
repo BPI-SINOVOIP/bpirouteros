@@ -1,0 +1,17 @@
+A/B autoboot (mt7981 / openwrt-one): fast boot + space-to-stop instead of the menu.
+
+Replaces AUTOBOOT_MENU_SHOW with keyed autoboot (BOOTDELAY=1 + AUTOBOOT_KEYED +
+AUTOBOOT_STOP_STR=space) in the spi-nand defconfig, so autoboot runs bootcmd /
+altbootcmd instead of showing the bootmenu (required for the bootcount/altbootcmd
+A/B rollback path). z02 (bootcount) builds on the AUTOBOOT_STOP_STR line this adds.
+
+--- a/configs/mt7981_openwrt-one-spi-nand_defconfig
++++ b/configs/mt7981_openwrt-one-spi-nand_defconfig
+@@ -16,4 +16,6 @@ CONFIG_DEBUG_UART=y
+ CONFIG_FIT=y
+ CONFIG_SPI_BOOT=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_BOOTDELAY=1
++CONFIG_AUTOBOOT_KEYED=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_USE_PREBOOT=y

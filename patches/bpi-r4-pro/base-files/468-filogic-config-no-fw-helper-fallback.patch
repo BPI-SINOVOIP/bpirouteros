@@ -1,0 +1,22 @@
+Do not wait 60 s for a firmware helper that does not exist.
+
+The AS21xxx PHY asks for its firmware during the MDIO scan, which runs several
+seconds before the root filesystem is mounted, so the direct load fails with
+-ENOENT. CONFIG_FW_LOADER_USER_HELPER_FALLBACK then makes the kernel wait for a
+userspace helper OpenWrt does not ship -- 60 seconds of nothing, and because the
+request is synchronous it delays the whole boot: root was mounted at 74 s
+instead of 16 s.
+
+Scoped to this board: prepare.sh applies patches/<board>/ only for the board
+being built, so the five other filogic boards keep the generic default.
+
+--- a/target/linux/mediatek/filogic/config-6.12
++++ b/target/linux/mediatek/filogic/config-6.12
+@@ -180,6 +180,7 @@
+ CONFIG_FWNODE_MDIO=y
+ CONFIG_FW_LOADER_PAGED_BUF=y
+ CONFIG_FW_LOADER_SYSFS=y
++# CONFIG_FW_LOADER_USER_HELPER_FALLBACK is not set
+ CONFIG_GCC_SUPPORTS_DYNAMIC_FTRACE_WITH_ARGS=y
+ CONFIG_GENERIC_ALLOCATOR=y
+ CONFIG_GENERIC_ARCH_TOPOLOGY=y

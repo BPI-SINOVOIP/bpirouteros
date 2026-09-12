@@ -1,0 +1,28 @@
+r3-mini: snand u-boot env = NOWHERE (provisioning u-boot ignores the board's env)
+
+The SPI-NAND u-boot is provisioning-only (flash NAND + provision eMMC). With
+CONFIG_ENV_IS_IN_UBI it read the NAND `ubootenv` volume on every boot — and a
+stale *valid* generic env there (distro_bootcmd / loadaddr=0x0) overrode our
+compiled defenv, so flash_nand / emmc_install were never loaded and bootcmd ran
+the undefined distro_bootcmd.
+
+Switch it to CONFIG_ENV_IS_NOWHERE: the provisioning u-boot now ALWAYS uses its
+compiled defenv (flash_nand / emmc_install / bootcmd=run emmc_install) and never
+touches the board's NAND env. The eMMC *product* u-boot is a separate variant and
+keeps CONFIG_ENV_IS_IN_MMC for its A/B state — the two are cleanly split.
+--- a/configs/mt7986a_bpi-r3-mini-snand_defconfig
++++ b/configs/mt7986a_bpi-r3-mini-snand_defconfig
+@@ -72,11 +72,8 @@
+ CONFIG_CMD_UBI_RENAME=y
+ CONFIG_OF_EMBED=y
+ CONFIG_ENV_OVERWRITE=y
+-CONFIG_ENV_IS_IN_UBI=y
+-CONFIG_ENV_REDUNDANT=y
+-CONFIG_ENV_UBI_PART="ubi"
+-CONFIG_ENV_UBI_VOLUME="ubootenv"
+-CONFIG_ENV_UBI_VOLUME_REDUND="ubootenv2"
++CONFIG_ENV_IS_NOWHERE=y
++CONFIG_ENV_SIZE=0x10000
+ CONFIG_ENV_RELOC_GD_ENV_ADDR=y
+ CONFIG_ENV_USE_DEFAULT_ENV_TEXT_FILE=y
+ CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="defenvs/bananapi_bpi-r3-mini_snand_env"

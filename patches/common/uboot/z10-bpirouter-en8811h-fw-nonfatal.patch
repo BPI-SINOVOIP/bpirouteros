@@ -1,0 +1,34 @@
+en8811h: don't deref uninitialized fw buffer when firmware load fails
+
+en8811h_read_fw() only sets *addr on success; on failure it returns the
+error without touching the caller's pointer. u-boot's ubi_volume_read()
+returns a POSITIVE errno (ENODEV=19) when the "en8811h-fw" UBI volume is
+absent, so en8811h_load_firmware()'s `if (ret < 0)` check misses it: it
+falls through and feeds the uninitialized `buffer` to air_write_buf(),
+causing a Synchronous Abort + CPU reset during `Net:` init — before u-boot
+reaches the prompt. (Seen real-machine on bpi-r3-mini RAM-booted against an
+unprovisioned NAND that has no en8811h-fw volume.)
+
+Init buffer = NULL and treat any non-zero ret as failure, so a missing/
+unreadable firmware degrades to a clean "Load firmware fail." and u-boot
+continues to boot (the PHY isn't needed for normal boot; the kernel loads
+its own en8811h firmware). Path-agnostic: also fixes the FW_IN_MMC path.
+Only compiled on boards with CONFIG_PHY_AIROHA_EN8811H (r3-mini, openwrt-one);
+binary-neutral for r4/r3/r4-lite.
+
+--- a/drivers/net/phy/air_en8811h.c
++++ b/drivers/net/phy/air_en8811h.c
+@@ -550,11 +550,11 @@
+ static int en8811h_load_firmware(struct phy_device *phydev)
+ {
+ 	struct en8811h_priv *priv = phydev->priv;
+-	void *buffer;
++	void *buffer = NULL;
+ 	int ret;
+ 
+ 	ret = en8811h_read_fw(&buffer);
+-	if (ret < 0)
++	if (ret)
+ 		goto en8811h_load_firmware_out;
+ 
+ 	ret = air_buckpbus_reg_write(phydev, EN8811H_FW_CTRL_1,

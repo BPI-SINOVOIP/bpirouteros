@@ -1,0 +1,228 @@
+diff --git a/package/network/config/netifd/patches/903-bpirouter-host-route-lifetime.patch b/package/network/config/netifd/patches/903-bpirouter-host-route-lifetime.patch
+new file mode 100644
+--- /dev/null
++++ b/package/network/config/netifd/patches/903-bpirouter-host-route-lifetime.patch
+@@ -0,0 +1,223 @@
++diff --git a/interface-ip.c b/interface-ip.c
++index 8866310..1532a3d 100644
++--- a/interface-ip.c
+++++ b/interface-ip.c
++@@ -258,7 +258,7 @@ interface_ip_find_route_target(struct interface *iface, union if_addr *a,
++ 
++ struct interface *
++ interface_ip_add_target_route(union if_addr *addr, bool v6, struct interface *iface,
++-			      bool exclude)
+++			      bool exclude, bool keep)
++ {
++ 	struct device_route *route, *r_next = NULL;
++ 	bool defaultroute_target = false;
++@@ -302,7 +302,9 @@ interface_ip_add_target_route(union if_addr *addr, bool v6, struct interface *if
++ 		return NULL;
++ 
++ 	iface = r_next->iface;
++-	if (defaultroute_target)
+++	/* An existing host route already reaches the endpoint and belongs to
+++	 * its configured/protocol route list, not to a dependency clone. */
+++	if (defaultroute_target || r_next->mask == (v6 ? 128 : 32))
++ 		return iface;
++ 
++ 	route = calloc(1, sizeof(*route));
++@@ -317,11 +319,46 @@ interface_ip_add_target_route(union if_addr *addr, bool v6, struct interface *if
++ 	route->metric = r_next->metric;
++ 	route->table = r_next->table;
++ 	route->iface = iface;
+++	route->keep_host_route = keep;
++ 	vlist_add(&iface->host_routes, &route->node, route);
++ 
++ 	return iface;
++ }
++ 
+++void
+++interface_ip_remove_target_route(union if_addr *addr, bool v6, struct interface *iface)
+++{
+++	struct device_route *route, *tmp;
+++	struct interface_ip_settings *ip[] = { &iface->config_ip, &iface->proto_ip };
+++	bool removed = false;
+++
+++	/* Only dependency-created host routes belong to protocol teardown.
+++	 * Explicit ubus routes and configured routes retain their own lifetime. */
+++	vlist_for_each_element_safe(&iface->host_routes, route, node, tmp) {
+++		if (route->keep_host_route || route->mask != (v6 ? 128 : 32) ||
+++		    v6 != ((route->flags & DEVADDR_FAMILY) == DEVADDR_INET6) ||
+++		    memcmp(&route->addr, addr, v6 ? sizeof(addr->in6) : sizeof(addr->in)))
+++			continue;
+++		vlist_delete(&iface->host_routes, &route->node);
+++		removed = true;
+++	}
+++	if (!removed)
+++		return;
+++
+++	/* A host route may have been configured after the dependency was added.
+++	 * Both lists then describe one kernel entry. Restore the current owners
+++	 * after deleting the dependency, without retaining an orphan clone. */
+++	for (unsigned int i = 0; i < ARRAY_SIZE(ip); i++) {
+++		vlist_for_each_element(&ip[i]->route, route, node) {
+++			if (!route->enabled || route->mask != (v6 ? 128 : 32) ||
+++			    v6 != ((route->flags & DEVADDR_FAMILY) == DEVADDR_INET6) ||
+++			    memcmp(&route->addr, addr, v6 ? sizeof(addr->in6) : sizeof(addr->in)))
+++				continue;
+++			route->failed = !!system_add_route(iface->l3_dev.dev, route);
+++		}
+++	}
+++}
+++
++ static void
++ interface_set_route_info(struct interface *iface, struct device_route *route)
++ {
++@@ -886,8 +923,14 @@ interface_update_host_route(struct vlist_tree *tree,
++ 			     struct vlist_node *node_old)
++ {
++ 	struct interface *iface;
+++	struct device_route *old, *new;
++ 
++ 	iface = container_of(tree, struct interface, host_routes);
+++	if (node_new && node_old) {
+++		old = container_of(node_old, struct device_route, node);
+++		new = container_of(node_new, struct device_route, node);
+++		new->keep_host_route |= old->keep_host_route;
+++	}
++ 	__interface_update_route(&iface->proto_ip, node_new, node_old);
++ }
++ 
++diff --git a/interface-ip.h b/interface-ip.h
++index cc7efbd..41b34f7 100644
++--- a/interface-ip.h
+++++ b/interface-ip.h
++@@ -95,6 +95,7 @@ struct device_route {
++ 	bool enabled;
++ 	bool keep;
++ 	bool failed;
+++	bool keep_host_route;
++ 
++ 	union if_addr nexthop;
++ 	int mtu;
++@@ -188,7 +189,8 @@ void interface_ip_set_enabled(struct interface_ip_settings *ip, bool enabled);
++ void interface_ip_update_metric(struct interface_ip_settings *ip, int metric);
++ 
++ struct interface *interface_ip_add_target_route(union if_addr *addr, bool v6, struct interface *iface,
++-						bool exclude);
+++					      bool exclude, bool keep);
+++void interface_ip_remove_target_route(union if_addr *addr, bool v6, struct interface *iface);
++ 
++ struct device_prefix* interface_ip_add_device_prefix(struct interface *iface,
++ 		struct in6_addr *addr, uint8_t length, time_t valid_until, time_t preferred_until,
++diff --git a/interface.c b/interface.c
++index b0442bd..764f47d 100644
++--- a/interface.c
+++++ b/interface.c
++@@ -1174,6 +1174,9 @@ interface_set_down(struct interface *iface)
++ 	} else {
++ 		iface->autostart = false;
++ 		netifd_ucode_check_network_enabled();
+++		/* Even an already-down protocol can own pending host dependencies. */
+++		if (iface->state == IFS_DOWN)
+++			interface_proto_event(iface->proto, PROTO_CMD_TEARDOWN, false);
++ 		__interface_set_down(iface, false);
++ 	}
++ }
++diff --git a/proto-shell.c b/proto-shell.c
++index 9e6c74e..aa3e5e6 100644
++--- a/proto-shell.c
+++++ b/proto-shell.c
++@@ -139,7 +139,7 @@ proto_shell_update_host_dep(struct proto_shell_dependency *dep)
++ 	}
++ 
++ 	if (!dep->any)
++-		iface = interface_ip_add_target_route(&dep->host, dep->v6, iface, false);
+++		iface = interface_ip_add_target_route(&dep->host, dep->v6, iface, false, false);
++ 
++ 	if (!iface)
++ 		goto out;
++@@ -152,13 +152,38 @@ out:
++ 	proto_shell_check_dependencies(dep->proto);
++ }
++ 
+++static void
+++proto_shell_release_host_dep(struct proto_shell_dependency *dep)
+++{
+++	struct interface *iface = dep->dep.iface;
+++	struct interface_user *user;
+++	struct proto_shell_dependency *other;
+++
+++	interface_remove_user(&dep->dep);
+++	if (!iface || dep->any)
+++		return;
+++
+++	/* The existing interface users are the ownership list. A second tunnel
+++	 * may still need this endpoint on the same uplink. */
+++	list_for_each_entry(user, &iface->users, list) {
+++		if (user->cb != proto_shell_if_down_cb)
+++			continue;
+++		other = container_of(user, struct proto_shell_dependency, dep);
+++		if (!other->any && other->v6 == dep->v6 &&
+++		    !memcmp(&other->host, &dep->host,
+++			    dep->v6 ? sizeof(dep->host.in6) : sizeof(dep->host.in)))
+++			return;
+++	}
+++	interface_ip_remove_target_route(&dep->host, dep->v6, iface);
+++}
+++
++ static void
++ proto_shell_clear_host_dep(struct proto_shell_state *state)
++ {
++ 	struct proto_shell_dependency *dep, *tmp;
++ 
++ 	list_for_each_entry_safe(dep, tmp, &state->deps, list) {
++-		interface_remove_user(&dep->dep);
+++		proto_shell_release_host_dep(dep);
++ 		list_del(&dep->list);
++ 		free(dep);
++ 	}
++@@ -182,6 +207,14 @@ proto_shell_handler(struct interface_proto_state *proto,
++ 	handler = state->handler;
++ 	proc = &state->script_task;
++ 
+++	/* An explicit stop while waiting for an uplink has no running lifetime
+++	 * to tear down. Drop its dependencies without launching another script. */
+++	if (cmd == PROTO_CMD_TEARDOWN && !proto_shell_busy(proto) &&
+++	    proto->iface->state == IFS_DOWN && !proto->iface->autostart) {
+++		proto_shell_clear_host_dep(state);
+++		return 0;
+++	}
+++
++ 	if (cmd == PROTO_CMD_SETUP) {
++ 		/* Explicit ifup enables autostart even for auto=0. Close it in
++ 		 * netifd before allocation/fork/slot admission can reject the script. */
++@@ -303,7 +336,7 @@ proto_shell_if_down_cb(struct interface_user *dep, struct interface *iface,
++ 		return;
++ 
++ 	pdep = container_of(dep, struct proto_shell_dependency, dep);
++-	interface_remove_user(dep);
+++	proto_shell_release_host_dep(pdep);
++ 	dep->cb = proto_shell_if_up_cb;
++ 	interface_add_user(dep, NULL);
++ 
++@@ -371,6 +404,10 @@ proto_shell_task_finish(struct proto_shell_state *state,
++ 		/* completed tearing down all tasks, now idle */
++ 		uloop_timeout_cancel(&state->teardown_timeout);
++ 		uloop_timeout_cancel(&state->checkup_timeout);
+++		/* Explicit ifdown must release endpoint routes. Automatic link-loss
+++		 * teardown keeps dependencies so uplink recovery can wake the proto. */
+++		if (!state->proto.iface->autostart)
+++			proto_shell_clear_host_dep(state);
++ 		state->sm = S_IDLE;
++ 		state->proto.proto_event(&state->proto, IFPEV_DOWN);
++ 		break;
++diff --git a/ubus.c b/ubus.c
++index ee7b5d2..db28141 100644
++--- a/ubus.c
+++++ b/ubus.c
++@@ -93,7 +93,7 @@ netifd_add_host_route(struct ubus_context *ctx, struct ubus_object *obj,
++ 	if (!inet_pton(v6 ? AF_INET6 : AF_INET, blobmsg_data(tb[HR_TARGET]), &a))
++ 		return UBUS_STATUS_INVALID_ARGUMENT;
++ 
++-	iface = interface_ip_add_target_route(&a, v6, iface, exclude);
+++	iface = interface_ip_add_target_route(&a, v6, iface, exclude, true);
++ 	if (!iface)
++ 		return UBUS_STATUS_NOT_FOUND;
++ 

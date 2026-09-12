@@ -1,0 +1,47 @@
+Stabilise eMMC writes in u-boot: force HS@48MHz, no HS200/HS400 (R4-Lite).
+
+mt7987-emmc.dtsi defaults the eMMC to 200MHz with mmc-hs200-1_8v/mmc-hs400-1_8v
+@1.8V. The eMMC -u-boot.dtsi caps frequency to 48MHz/3.3V but leaves the HS200/
+HS400 caps in place, and the spim-nand -u-boot.dtsi has NO &mmc0 override at all
+— so the NAND->eMMC provisioning hop drives the eMMC at 200MHz HS200, which this
+3.3V board cannot do. mtk_sd then reports "Tune fail!" and falls back to a
+marginal pad delay, making the large FIT write to the production slot fail
+intermittently ("mmc write failed / 0 blocks written: ERROR").
+
+Drop the HS200/HS400 caps in the eMMC DT and add the matching 48MHz/3.3V eMMC
+override to the spim-nand DT so both provisioning paths use plain high-speed
+without tuning. eMMC here is only touched by one-time provisioning writes, so
+48MHz HS is ample.
+
+--- a/arch/arm/dts/mt7987a-bpi-r4-lite-spim-nand-u-boot.dtsi
++++ b/arch/arm/dts/mt7987a-bpi-r4-lite-spim-nand-u-boot.dtsi
+@@ -67,3 +67,16 @@
+ 		};
+ 	};
+ };
++
++&mmc0 {
++	/* The NAND->eMMC provisioning hop writes eMMC from this (NAND-booted) u-boot.
++	 * mt7987-emmc.dtsi defaults eMMC to 200MHz HS200/HS400 @1.8V, but this board
++	 * is 3.3V/48MHz HS (see the eMMC -u-boot.dtsi). Without this override mtk_sd
++	 * attempts HS200 tuning it cannot satisfy -> "Tune fail!" -> flaky large writes.
++	 * Match the eMMC u-boot config so the write is deterministic. */
++	max-frequency = <48000000>;
++	bus-width = <4>;
++	vqmmc-supply = <&reg_3p3v>;
++	/delete-property/ mmc-hs200-1_8v;
++	/delete-property/ mmc-hs400-1_8v;
++};
+--- a/arch/arm/dts/mt7987a-bpi-r4-lite-emmc-u-boot.dtsi
++++ b/arch/arm/dts/mt7987a-bpi-r4-lite-emmc-u-boot.dtsi
+@@ -30,6 +30,10 @@
+ 	bus-width = <4>;
+ 	cap-mmc-highspeed;
+ 	cap-mmc-hw-reset;
++	/* HS200/HS400 inherited from mt7987-emmc.dtsi but unusable at 3.3V — drop
++	 * them so mtk_sd uses plain HS@48MHz without (failing) tuning. */
++	/delete-property/ mmc-hs200-1_8v;
++	/delete-property/ mmc-hs400-1_8v;
+ 	vmmc-supply = <&reg_3p3v>;
+ 	vqmmc-supply = <&reg_3p3v>;
+ 	non-removable;

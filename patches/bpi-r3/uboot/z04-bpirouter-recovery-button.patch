@@ -1,0 +1,33 @@
+recovery(r3): add linux,code to u-boot button nodes so `button reset` works
+
+u-boot's button_gpio_probe() requires a linux,code property:
+    ret = dev_read_u32(dev, "linux,code", &priv->linux_code);
+    return ret;            /* -EINVAL (-22) when the property is absent */
+R3 button nodes (mt7986a-bpi-r3-sd.dts, #included by -emmc.dts) set only
+label + gpios, no linux,code -> probe fails, so `button reset` (used by the
+A/B bootcmd to trigger golden_restore) reports not-found (err -22; the reset
+key also shows -16 on a second try, the first failed probe leaves pio9
+claimed) and L4 recovery can never fire. R4 / r4-lite button nodes carry
+linux,code and work. Add it (reset = KEY_RESTART on physical reset pio9,
+wps = KEY_WPS_BUTTON on pio10). DTS-only; mt7986 pinctrl/gpio driver is fine.
+
+--- a/arch/arm/dts/mt7986a-bpi-r3-sd.dts
++++ b/arch/arm/dts/mt7986a-bpi-r3-sd.dts
+@@ -8,4 +8,5 @@
+ #include "mt7986.dtsi"
+ #include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
+ 
+ / {
+@@ -39,9 +39,11 @@
+ 		factory {
+ 			label = "reset";
++			linux,code = <KEY_RESTART>;
+ 			gpios = <&pio 9 GPIO_ACTIVE_LOW>;
+ 		};
+ 
+ 		wps {
+ 			label = "wps";
++			linux,code = <KEY_WPS_BUTTON>;
+ 			gpios = <&pio 10 GPIO_ACTIVE_LOW>;
+ 		};

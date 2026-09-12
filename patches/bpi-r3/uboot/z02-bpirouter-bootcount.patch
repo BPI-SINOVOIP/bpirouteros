@@ -1,0 +1,34 @@
+A/B: env-backed u-boot bootcount on R3 (mt7986), foundation for A/B rollback.
+
+Mirror of bpi-r4 z02. Adds BOOTCOUNT_LIMIT/ENV/ALTBOOTCMD to R3's three media
+defconfigs, after the AUTOBOOT_STOP_STR line z01 adds. The counter is gated by
+the `upgrade_available` env var, so steady-state boots neither count nor write
+flash; once it exceeds `bootlimit`, autoboot runs altbootcmd (slot switch).
+
+--- a/configs/mt7986a_bpi-r3-emmc_defconfig
++++ b/configs/mt7986a_bpi-r3-emmc_defconfig
+@@ -23,3 +23,6 @@
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+--- a/configs/mt7986a_bpi-r3-sd_defconfig
++++ b/configs/mt7986a_bpi-r3-sd_defconfig
+@@ -23,3 +23,6 @@
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+--- a/configs/mt7986a_bpi-r3-snand_defconfig
++++ b/configs/mt7986a_bpi-r3-snand_defconfig
+@@ -20,3 +20,6 @@
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y

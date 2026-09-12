@@ -1,0 +1,18 @@
+# bpi-r3-mini u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.12.1).
+# Archetype 2 (no SD): eMMC is the A/B product medium; SPI-NAND holds the golden
+# (snand-factory) read by the eMMC u-boot during golden_restore. Shares the mt7986
+# SoC constants with bpi-r3. The eMMC A/B env is byte-identical logic to bpi-r3's
+# (the shared media/emmc.env.in). Normal boot does not require EN8811H firmware,
+# but the golden restore must copy the archived en8811h-fw payload back to eMMC
+# boot1 so the recovered installation retains its complete PHY provisioning.
+# The SPI-NAND golden env is handled separately (archetype-2 provisioning).
+SOC_ENV=mt7986                                            # source ../soc/mt7986.params
+DTBBASE=mt7986a-bananapi-bpi-r3-mini                      # config-/overlay base (dash form)
+IMGPREFIX=openwrt-mediatek-filogic-bananapi_bpi-r3-mini   # bootfile prefix (underscore form)
+DEFENV_BASE=bananapi_bpi-r3-mini                          # defenvs/<DEFENV_BASE>_<medium>_env
+MEDIA="emmc"                                              # eMMC A/B product env (snand golden env: separate)
+BOOTLED_PWR=green:status                                  # u-boot LED label for power/boot indicator
+BOOTLED_REC=blue:status                                   # u-boot LED label for recovery indicator
+BOOTCONF_EXTRA=                                           # no extra DT overlay (WiFi is integrated MT7986)
+GR_EN8811H='ubi read $loadaddr en8811h-fw && setenv fileaddr $loadaddr && run emmc_write_en8811h_fw'
+EMMC_WRITE_EN8811H_FW='mmc partconf 0 1 2 2 && mmc erase 0x0 0x120 && mmc write $fileaddr 0x0 0x120 ; mmc partconf 0 1 1 0'

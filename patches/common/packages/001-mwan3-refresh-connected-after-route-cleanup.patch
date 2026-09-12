@@ -1,0 +1,37 @@
+diff --git a/net/mwan3/files/usr/sbin/mwan3rtmon b/net/mwan3/files/usr/sbin/mwan3rtmon
+index 9035cc8..4223f63 100755
+--- a/net/mwan3/files/usr/sbin/mwan3rtmon
++++ b/net/mwan3/files/usr/sbin/mwan3rtmon
+@@ -77,7 +77,6 @@ mwan3_rtmon_route_handle()
+ 		$IPS -! add mwan3_connected_${route_family} ${route_line%% *}
+ 	else
+ 		action="del"
+-		mwan3_set_connected_${route_family}
+ 	fi
+ 
+ 	if [ -z "${route_line##*linkdown*}" ]; then
+@@ -145,6 +144,9 @@ mwan3_rtmon_route_handle()
+ 	elif [ -n "${route_line##default*}" ] && [ -n "${route_line##fe80::/64*}" ]; then
+ 		config_foreach handle_route_cb interface
+ 	fi
++
++	# Rebuild only after route propagation has removed policy-table copies.
++	[ "$action" != "del" ] || mwan3_set_connected_${route_family}
+ }
+ 
+ main()
+diff --git a/net/mwan3/files/etc/hotplug.d/iface/15-mwan3 b/net/mwan3/files/etc/hotplug.d/iface/15-mwan3
+--- a/net/mwan3/files/etc/hotplug.d/iface/15-mwan3
++++ b/net/mwan3/files/etc/hotplug.d/iface/15-mwan3
+@@ -83,6 +83,11 @@ case "$ACTION" in
+ 		mwan3_delete_iface_iptables $INTERFACE
+ 		procd_running mwan3 "track_$INTERFACE" && procd_send_signal mwan3 "track_$INTERFACE" USR1
+ 		mwan3_set_policies_iptables
++		# A vanished netdev may emit only a local-table route deletion, which
++		# rtmon intentionally ignores. Rebuild after the interface policy table
++		# has been flushed so no address from the vanished link survives.
++		mwan3_set_connected_ipv4
++		mwan3_set_connected_ipv6
+ 	;;
+ esac
+ 

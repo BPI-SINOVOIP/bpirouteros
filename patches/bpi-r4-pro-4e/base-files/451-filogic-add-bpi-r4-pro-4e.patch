@@ -1,0 +1,28 @@
+filogic: register the 4E FIT and both exclusive WAN overlays
+
+Reuse ordinary MT7988 comb provisioning artifacts. The platform/package
+integration and build admission remain task 22-D steps 5/6; this definition
+does not make the SKU buildable through the product entry points yet.
+
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -720,6 +720,19 @@
+ endef
+ TARGET_DEVICES += bananapi_bpi-r4-poe
+ 
++define Device/bananapi_bpi-r4-pro-4e
++  DEVICE_MODEL := BPi-R4 Pro 4E
++  DEVICE_DTS := mt7988a-bananapi-bpi-r4-pro-4e
++  DEVICE_DTS_CONFIG := config-mt7988a-bananapi-bpi-r4-pro-4e
++  $(call Device/bananapi_bpi-r4-common)
++  DEVICE_DTS_OVERLAY := mt7988a-bananapi-bpi-r4-pro-4e-emmc \
++	mt7988a-bananapi-bpi-r4-pro-4e-sd \
++	mt7988a-bananapi-bpi-r4-pro-4e-wan-copper \
++	mt7988a-bananapi-bpi-r4-pro-4e-wan-sfp
++  DEVICE_PACKAGES += mt7988-2p5g-phy-firmware
++endef
++TARGET_DEVICES += bananapi_bpi-r4-pro-4e
++
+ define Device/bananapi_bpi-r4-lite
+   DEVICE_VENDOR := Bananapi
+   DEVICE_MODEL := BPi-R4 Lite

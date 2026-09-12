@@ -1,0 +1,6 @@
+# mt7981 (OpenWrt One) per-SoC env constants (FIRMWARE_ROLLBACK §10.6.3).
+# First mt7981 board; family-2 (NAND-only UBI A/B, Track B). Values with $loadaddr
+# would be single-quoted (u-boot env text) — none needed here yet.
+# mt7981 NAND uses a 0x1f000 ubootenv UBI volume (same as mt7986).
+LOADADDR=0x46000000
+UBOOTENV_VOL=0x1f000

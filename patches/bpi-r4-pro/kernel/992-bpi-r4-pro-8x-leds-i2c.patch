@@ -1,0 +1,94 @@
+arm64: dts: r4-pro: add err/act system LEDs via i2c2 PCA9555 mux
+
+Wire the SoC i2c2 -> pca9545 mux(0x70) ch0 -> pca9555(0x20) chain and
+expose the two front-panel system LEDs on the expander: act (blue,
+IO1_6) and err (red, IO1_7), both active-low. act runs the heartbeat
+trigger and is deliberately NOT bound to the diag.sh led-boot/running/
+upgrade aliases (those force the LED solid at boot-done, overriding the
+heartbeat), so act blinks for the whole runtime; err defaults off and is
+lit by the led-failsafe alias (and by u-boot on fault). pca9545
+reset-gpios omitted (r4's &pio 5 is SMI_MDC on r4-pro); add later if the
+mux needs a hard reset.
+
+The pca9555 is on mux channel 0 (i2c@0): i2cdetect shows 0x20 ACKs only on
+chan_id 0 (i2c-1), and the pca953x driver fails its register write (-6) if
+placed on any other channel, leaving gpio-leds deferred and the act LED stuck
+solid. An earlier move to ch1 was a misdiagnosis made when the pca953x driver
+was not yet built-in, so no probe logs appeared on any channel.
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -22,6 +22,7 @@
+ 	aliases {
+ 		ethernet0 = &gmac0;
+ 		serial0 = &serial0;
++		led-failsafe = &led_err;
+ 	};
+ 
+ 	chosen {
+@@ -62,6 +66,22 @@
+ 			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
+ 		};
+ 	};
++
++	gpio-leds {
++		compatible = "gpio-leds";
++
++		led_act: led-act {
++			label = "act";
++			gpios = <&pca9555 14 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "heartbeat";
++		};
++
++		led_err: led-err {
++			label = "err";
++			gpios = <&pca9555 15 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++	};
+ };
+ 
+ &serial0 {
+@@ -115,6 +135,13 @@
+ 		mux {
+ 			function = "spi";
+ 			groups = "spi0", "spi0_wp_hold";
++		};
++	};
++
++	i2c2_1_pins: i2c2-g1-pins {
++		mux {
++			function = "i2c";
++			groups = "i2c2_1";
+ 		};
+ 	};
+ };
+@@ -170,3 +197,29 @@
+ 		};
+ 	};
+ };
++
++&i2c2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c2_1_pins>;
++	status = "okay";
++
++	pca9545: i2c-mux@70 {
++		compatible = "nxp,pca9545";
++		reg = <0x70>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		i2c@0 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <0>;
++
++			pca9555: gpio@20 {
++				compatible = "nxp,pca9555";
++				reg = <0x20>;
++				gpio-controller;
++				#gpio-cells = <2>;
++			};
++		};
++	};
++};

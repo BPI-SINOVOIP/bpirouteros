@@ -1,0 +1,96 @@
+r4-pro: add the pwm-fan the board actually has, with cooling maps.
+
+BPI-R4Pro-V10 carries two populated 4-pin fan headers (CN36/CN38, "KK 254 PIN1R
+FOR FAN": 12V, GND, PWM, TACH) driven from GPIO57_PWMD0 through R895 0R, and the
+enclosure fan plugs into one of them. The DTS brought up in 990 declared no fan
+and did not enable the PWM controller at all, so /sys/class/pwm was empty, no
+cooling_device existed, and the thermal framework had no way to regulate that
+fan -- it just ran at whatever the header defaults to. network.get_resources
+correspondingly reported the board as fanless, which was accurate but only
+because the software could not see the hardware.
+
+Found during TEST-ACCEPTANCE §9.2 on r4-pro and confirmed against
+BPI-R4Pro-V10-SCH-20250806 sheet CM19.
+
+The drive is direct (0R series, no inverting stage), unlike r3/r3-mini whose
+pwm-fans are inverted, so cooling-levels rise with duty. Channel, period and the
+115/85/40C active trips mirror what OpenWrt already ships for the MT7988A r4
+(patches-6.12/180), since it is the same SoC and the same PWM channel 0.
+
+The headers also carry TACH. Wiring that up would make r4-pro the first board in
+this product able to populate fan_rpm, but it needs the tach GPIO's interrupt
+mapping; left for a follow-up rather than guessed at here.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -30,6 +30,18 @@
+ 		rootdisk-spim-nand = <&ubi_rootfs>;
+ 	};
+ 
++	fan: pwm-fan {
++		compatible = "pwm-fan";
++		/* CN36/CN38 are 4-pin KK254 fan headers (12V, GND, PWM, TACH) driven
++		 * from GPIO57_PWMD0 through R895 0R -- a direct, non-inverted drive,
++		 * so duty rises with cooling demand (BPI-R4Pro-V10 sheet CM19).
++		 * Same PWM channel and period the MT7988A r4 uses. */
++		cooling-levels = <0 80 128 255>;
++		#cooling-cells = <2>;
++		pwms = <&pwm 0 50000>;
++		status = "okay";
++	};
++
+ 	memory@40000000 {
+ 		reg = <0x00 0x40000000 0x00 0x10000000>;
+ 		device_type = "memory";
+@@ -74,6 +86,51 @@
+ 	status = "okay";
+ };
+ 
++&pwm {
++	status = "okay";
++};
++
++&cpu_thermal {
++	/* mt7988a.dtsi declares only the 125C critical trip; the active trips that
++	 * drive a fan live in the per-board dtsi, so mirror the MT7988A r4 ramp. */
++	trips {
++		cpu_trip_active_high: active-high {
++			temperature = <115000>;
++			hysteresis = <2000>;
++			type = "active";
++		};
++
++		cpu_trip_active_med: active-med {
++			temperature = <85000>;
++			hysteresis = <2000>;
++			type = "active";
++		};
++
++		cpu_trip_active_low: active-low {
++			temperature = <40000>;
++			hysteresis = <2000>;
++			type = "active";
++		};
++	};
++
++	cooling-maps {
++		map-cpu-active-high {
++			cooling-device = <&fan 3 3>;
++			trip = <&cpu_trip_active_high>;
++		};
++
++		map-cpu-active-med {
++			cooling-device = <&fan 2 2>;
++			trip = <&cpu_trip_active_med>;
++		};
++
++		map-cpu-active-low {
++			cooling-device = <&fan 1 1>;
++			trip = <&cpu_trip_active_low>;
++		};
++	};
++};
++
+ &eth {
+ 	status = "okay";
+ };

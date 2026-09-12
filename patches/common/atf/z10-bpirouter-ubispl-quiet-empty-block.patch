@@ -1,0 +1,24 @@
+mediatek: ubispl: don't NOTICE-spam on empty (erased) UBI blocks
+
+The raw-UBI BL2 scan prints "Bad EC magic in block N ffffffff" via NOTICE for
+every erased/empty block (EC magic 0xffffffff). On our boards the SPI-NAND tail
+is full of empty blocks, so the serial console is flooded at every NAND boot. An
+empty (never-written) block is normal, not an error -> demote it to VERBOSE
+(ubi_dbg). A genuinely corrupt magic still prints NOTICE.
+
+Affects every board's spim-nand BL2 (the ATF package is shared); log-only change,
+boot behaviour is unchanged.
+--- a/drivers/io/ubi/ubispl.c
++++ b/drivers/io/ubi/ubispl.c
+@@ -244,7 +244,10 @@
+ 	/* Magic number available ? */
+ 	magic = be32toh(eh.magic);
+ 	if (magic != UBI_EC_HDR_MAGIC) {
+-		ubi_msg("Bad EC magic in block %d %08x", pnum, magic);
++		if (magic == 0xffffffff)
++			ubi_dbg("Empty (erased) block %d", pnum);
++		else
++			ubi_msg("Bad EC magic in block %d %08x", pnum, magic);
+ 		goto out;
+ 	}
+ 

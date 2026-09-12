@@ -1,0 +1,20 @@
+LED: relabel the pin-9 status LED from "red" to "orange" in u-boot.
+
+The board's third status LED is amber/orange (schematic), not red — the upstream
+DTS (453) mislabels it. Rename the node + label so the provisioning / recovery env
+drives it as `led orange` (matches the kernel DTS relabel and the documented
+"orange = attention/waiting" semantics). White/green unchanged.
+
+--- a/arch/arm/dts/openwrt-one.dts
++++ b/arch/arm/dts/openwrt-one.dts
+@@ -42,8 +42,8 @@
+ 		compatible = "gpio-leds";
+
+-		red {
+-			label = "red";
++		orange {
++			label = "orange";
+ 			gpios = <&pio 9 GPIO_ACTIVE_HIGH>;
+ 		};
+
+ 		white {

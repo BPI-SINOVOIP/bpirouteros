@@ -1,0 +1,324 @@
+arm64: dts: mediatek: add Banana Pi BPI-R4 Pro 8X (minimal)
+
+New MT7988A board (this kernel had no r4-pro support). Minimal bring-up:
+MT7988 internal switch as the management path, eMMC/SD/256MB SPI-NAND,
+UART0 console and the reset button. The 4x2.5G (MaxLinear) and 2x10G
+(Aeonsemi) ports use out-of-tree drivers and are added later.
+
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -25,6 +25,9 @@
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-2g5.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-emmc.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-sd.dtbo
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-emmc.dtbo
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-sd.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-emmc.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-aqr.dtbo
+@@ -109,5 +112,6 @@
+ DTC_FLAGS_mt7986a-bananapi-bpi-r3-mini := -@
+ DTC_FLAGS_mt7988a-bananapi-bpi-r4 := -@
+ DTC_FLAGS_mt7988a-bananapi-bpi-r4-2g5 := -@
++DTC_FLAGS_mt7988a-bananapi-bpi-r4-pro-8x := -@
+ DTC_FLAGS_mt8395-radxa-nio-12l := -@
+ 
+
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -0,0 +1,178 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * Banana Pi BPI-R4 Pro 8X (MT7988A) - minimal bring-up.
++ *
++ * Boots from the MT7988 internal switch (management path) + eMMC/SD/SPI-NAND.
++ * The 4x 2.5G ports (MaxLinear MxL862xx switch) and 2x 10G ports (Aeonsemi
++ * AS21xxx) use out-of-tree drivers and are added in a later step.
++ */
++
++/dts-v1/;
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++#include "mt7988a.dtsi"
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-8x", "mediatek,mt7988a";
++	model = "Banana Pi BPI-R4 Pro 8X";
++	chassis-type = "embedded";
++
++	aliases {
++		ethernet0 = &gmac0;
++		serial0 = &serial0;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++		bootargs = "console=ttyS0,115200n1 pci=pcie_bus_perf ubi.block=0,fit root=/dev/fit0";
++		rootdisk-spim-nand = <&ubi_rootfs>;
++	};
++
++	memory@40000000 {
++		reg = <0x00 0x40000000 0x00 0x10000000>;
++		device_type = "memory";
++	};
++
++	reg_3p3v: regulator-3p3v {
++		compatible = "regulator-fixed";
++		regulator-name = "fixed-3.3V";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-boot-on;
++		regulator-always-on;
++	};
++
++	reg_1p8v: regulator-1p8v {
++		compatible = "regulator-fixed";
++		regulator-name = "fixed-1.8V";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		regulator-boot-on;
++		regulator-always-on;
++	};
++
++	gpio-keys {
++		compatible = "gpio-keys";
++
++		reset {
++			label = "reset";
++			linux,code = <KEY_RESTART>;
++			gpios = <&pio 13 GPIO_ACTIVE_LOW>;
++		};
++
++		wps {
++			label = "wps";
++			linux,code = <KEY_WPS_BUTTON>;
++			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
++		};
++	};
++};
++
++&serial0 {
++	status = "okay";
++};
++
++&eth {
++	status = "okay";
++};
++
++&gmac0 {
++	status = "okay";
++};
++
++&switch {
++	status = "okay";
++};
++
++&gsw_port0 {
++	label = "lan1";
++};
++
++&gsw_port1 {
++	label = "lan2";
++};
++
++&gsw_port2 {
++	label = "lan3";
++};
++
++&gsw_port3 {
++	label = "lan4";
++};
++
++&pio {
++	mmc0_pins_emmc_51: mmc0-emmc-51-pins {
++		mux {
++			function = "flash";
++			groups = "emmc_51";
++		};
++	};
++
++	mmc0_pins_sdcard: mmc0-sdcard-pins {
++		mux {
++			function = "flash";
++			groups = "sdcard";
++		};
++	};
++
++	spi0_flash_pins: spi0-flash-pins {
++		mux {
++			function = "spi";
++			groups = "spi0", "spi0_wp_hold";
++		};
++	};
++};
++
++&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi0_flash_pins>;
++	status = "okay";
++
++	spi_nand: flash@0 {
++		compatible = "spi-nand";
++		reg = <0>;
++		spi-max-frequency = <52000000>;
++		spi-tx-bus-width = <4>;
++		spi-rx-bus-width = <4>;
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "bl2";
++				reg = <0x0 0x200000>;
++				read-only;
++			};
++
++			partition@200000 {
++				label = "ubi";
++				reg = <0x200000 0xfe00000>;
++				compatible = "linux,ubi";
++
++				volumes {
++					ubi-volume-ubootenv {
++						volname = "ubootenv";
++						nvmem-layout {
++							compatible = "u-boot,env-redundant-bool-layout";
++						};
++					};
++
++					ubi-volume-ubootenv2 {
++						volname = "ubootenv2";
++						nvmem-layout {
++							compatible = "u-boot,env-redundant-bool-layout";
++						};
++					};
++
++					ubi_rootfs: ubi-volume-fit {
++						volname = "fit";
++					};
++				};
++			};
++		};
++	};
++};
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-emmc.dtso
+@@ -0,0 +1,56 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * Copyright (C) 2021 MediaTek Inc.
++ * Author: Frank Wunderlich <frank-w@public-files.de>
++ */
++
++/dts-v1/;
++/plugin/;
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-8x", "mediatek,mt7988a";
++};
++
++&{/soc/mmc@11230000} {
++	pinctrl-names = "default", "state_uhs";
++	pinctrl-0 = <&mmc0_pins_emmc_51>;
++	pinctrl-1 = <&mmc0_pins_emmc_51>;
++	bus-width = <8>;
++	max-frequency = <200000000>;
++	cap-mmc-highspeed;
++	mmc-hs200-1_8v;
++	mmc-hs400-1_8v;
++	hs400-ds-delay = <0x12814>;
++	vqmmc-supply = <&reg_1p8v>;
++	vmmc-supply = <&reg_3p3v>;
++	non-removable;
++	no-sd;
++	no-sdio;
++	#address-cells = <1>;
++	#size-cells = <0>;
++	status = "okay";
++
++	card@0 {
++		compatible = "mmc-card";
++		reg = <0>;
++
++		partitions {
++			compatible = "gpt-partitions";
++
++			block-partition-env {
++				partname = "ubootenv";
++				nvmem-layout {
++					compatible = "u-boot,env-layout";
++				};
++			};
++
++			emmc_rootfs: block-partition-production {
++				partname = "production";
++			};
++		};
++	};
++};
++
++&{/chosen} {
++	rootdisk-emmc = <&emmc_rootfs>;
++};
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-sd.dtso
+@@ -0,0 +1,54 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * Copyright (C) 2023 MediaTek Inc.
++ * Author: Frank Wunderlich <frank-w@public-files.de>
++ */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-8x", "mediatek,mt7988a";
++};
++
++&{/soc/mmc@11230000} {
++	pinctrl-names = "default", "state_uhs";
++	pinctrl-0 = <&mmc0_pins_sdcard>;
++	pinctrl-1 = <&mmc0_pins_sdcard>;
++	cd-gpios = <&pio 12 GPIO_ACTIVE_LOW>;
++	bus-width = <4>;
++	max-frequency = <25000000>;
++	cap-sd-highspeed;
++	vmmc-supply = <&reg_3p3v>;
++	vqmmc-supply = <&reg_3p3v>;
++	no-mmc;
++	#address-cells = <1>;
++	#size-cells = <0>;
++	status = "okay";
++
++	card@0 {
++		compatible = "mmc-card";
++		reg = <0>;
++
++		partitions {
++			compatible = "gpt-partitions";
++
++			block-partition-env {
++				partname = "ubootenv";
++				nvmem-layout {
++					compatible = "u-boot,env-layout";
++				};
++			};
++
++			sd_rootfs: block-partition-production {
++				partname = "production";
++			};
++		};
++	};
++};
++
++&{/chosen} {
++	rootdisk-sd = <&sd_rootfs>;
++};

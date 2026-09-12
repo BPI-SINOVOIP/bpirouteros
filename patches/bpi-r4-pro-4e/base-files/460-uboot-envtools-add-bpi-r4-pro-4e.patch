@@ -1,0 +1,10 @@
+--- a/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
++++ b/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
+@@ -84,6 +84,7 @@
+ bananapi,bpi-r4|\
+ bananapi,bpi-r4-lite|\
+ bananapi,bpi-r4-poe|\
++bananapi,bpi-r4-pro-4e|\
+ cmcc,rax3000m|\
+ jdcloud,re-cp-03)
+ 	. /lib/upgrade/fit.sh

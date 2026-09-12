@@ -1,0 +1,288 @@
+diff --git a/package/network/utils/comgt/files/ncm.sh b/package/network/utils/comgt/files/ncm.sh
+index c1cf0aa..3b8fb54 100644
+--- a/package/network/utils/comgt/files/ncm.sh
++++ b/package/network/utils/comgt/files/ncm.sh
+@@ -14,7 +14,6 @@ proto_ncm_init_config() {
+ 	proto_config_add_string auth
+ 	proto_config_add_string username
+ 	proto_config_add_string password
+-	proto_config_add_string pincode
+ 	proto_config_add_string delay
+ 	proto_config_add_string mode
+ 	proto_config_add_string pdptype
+@@ -26,13 +25,18 @@ proto_ncm_init_config() {
+ proto_ncm_setup() {
+ 	local interface="$1"
+ 
+ 	local connect context_type devname devpath finalize ifpath initialize manufacturer setmode
+ 
+ 	local delegate ip4table ip6table mtu sourcefilter $PROTO_DEFAULT_OPTIONS
+ 	json_get_vars delegate ip4table ip6table mtu sourcefilter $PROTO_DEFAULT_OPTIONS
+ 
+-	local apn auth delay device ifname mode password pdptype pincode profile username
+-	json_get_vars apn auth delay device ifname mode password pdptype pincode profile username
++	local apn auth delay device ifname mode password pdptype profile username
++	json_get_vars apn auth delay device ifname mode password pdptype profile username
++
++	# bpirouter-apid owns retries and recovery. Read the complete netifd input
++	# before proto_block_restart replaces the JSON context, but close restart
++	# admission before the first gcom command starts the physical lifetime.
++	proto_block_restart "$interface"
+ 
+ 	[ "$metric" = "" ] && metric="0"
+ 
+@@ -133,14 +137,5 @@ proto_ncm_setup() {
+ 	done
+ 
+-	[ -n "$pincode" ] && {
+-		PINCODE="$pincode" gcom -d "$device" -s /etc/gcom/setpin.gcom || {
+-			echo "Unable to verify PIN"
+-			proto_notify_error "$interface" PIN_FAILED
+-			proto_block_restart "$interface"
+-			return 1
+-		}
+-	}
+-
+ 	json_get_values configure configure
+ 	echo "Configuring modem"
+ 	for i in $configure; do
+@@ -177,6 +172,13 @@ proto_ncm_setup() {
+ 	}
+ 
+ 	json_get_vars finalize
++	[ -n "$finalize" ] && {
++		eval COMMAND="$finalize" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
++			echo "Failed to configure modem"
++			proto_notify_error "$interface" FINALIZE_FAILED
++			return 1
++		}
++	}
+ 
+ 	echo "Setting up $ifname"
+ 	proto_init_update "$ifname" 1
+@@ -220,14 +223,6 @@ proto_ncm_setup() {
+ 		echo "Setting MTU of $ifname to $mtu"
+ 		/sbin/ip link set dev $ifname mtu $mtu
+ 	}
+-
+-	[ -n "$finalize" ] && {
+-		eval COMMAND="$finalize" gcom -d "$device" -s /etc/gcom/runcommand.gcom || {
+-			echo "Failed to configure modem"
+-			proto_notify_error "$interface" FINALIZE_FAILED
+-			return 1
+-		}
+-	}
+ }
+ 
+ proto_ncm_teardown() {
+diff --git a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+index 8297e6b..bcb563e 100755
+--- a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
++++ b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+@@ -15,7 +15,6 @@ proto_qmi_init_config() {
+ 	proto_config_add_string auth
+ 	proto_config_add_string username
+ 	proto_config_add_string password
+-	proto_config_add_string pincode
+ 	proto_config_add_int delay
+ 	proto_config_add_string modes
+ 	proto_config_add_string pdptype
+@@ -43,12 +42,17 @@ proto_qmi_setup() {
+ 	local delegate ip4table ip6table mtu sourcefilter $PROTO_DEFAULT_OPTIONS
+ 	json_get_vars delegate ip4table ip6table mtu sourcefilter $PROTO_DEFAULT_OPTIONS
+ 
+-	local apn auth delay device modes password pdptype pincode username v6apn
+-	json_get_vars apn auth delay device modes password pdptype pincode username v6apn
++	local apn auth delay device modes password pdptype username v6apn
++	json_get_vars apn auth delay device modes password pdptype username v6apn
+ 
+ 	local profile v6profile devpath dhcp dhcpv6 autoconnect plmn timeout
+ 	json_get_vars profile v6profile devpath dhcp dhcpv6 autoconnect plmn timeout
+ 
++	# bpirouter-apid owns retries and recovery. Read the complete netifd input
++	# before proto_block_restart replaces the JSON context, but close restart
++	# admission before the first uqmi command starts the physical lifetime.
++	proto_block_restart "$interface"
++
+ 	[ "$timeout" = "" ] && timeout="10"
+ 
+ 	[ "$metric" = "" ] && metric="0"
+@@ -87,116 +91,9 @@ proto_qmi_setup() {
+ 		/sbin/ip link set dev $ifname mtu $mtu
+ 	}
+ 
+-	echo "Waiting for SIM initialization"
+-	local uninitialized_timeout=0
+-	# timeout 3s for first call to avoid hanging uqmi
+-	uqmi -d "$device" -t 3000 --get-pin-status > /dev/null 2>&1
+-	while uqmi -s -d "$device" -t 1000 --get-pin-status | grep '"UIM uninitialized"' > /dev/null; do
+-		[ -e "$device" ] || return 1
+-		if [ "$uninitialized_timeout" -lt "$timeout" -o "$timeout" = "0" ]; then
+-			let uninitialized_timeout++
+-			sleep 1;
+-		else
+-			echo "SIM not initialized"
+-			proto_notify_error "$interface" SIM_NOT_INITIALIZED
+-			proto_block_restart "$interface"
+-			return 1
+-		fi
+-	done
+-
+-	# Check if UIM application is stuck in illegal state
+-	local uim_state_timeout=0
+-	while true; do
+-		json_load "$(uqmi -s -d "$device" -t 2000 --uim-get-sim-state)"
+-		json_get_var card_application_state card_application_state
+-
+-		# SIM card is either completely absent or state is labeled as illegal
+-		# Try to power-cycle the SIM card to recover from this state
+-		if [ -z "$card_application_state" -o "$card_application_state" = "illegal" ]; then
+-			echo "SIM in illegal state - Power-cycling SIM"
+-
+-			# Try to reset SIM application
+-			uqmi -d "$device" -t 1000 --uim-power-off --uim-slot 1
+-			sleep 3
+-			uqmi -d "$device" -t 1000 --uim-power-on --uim-slot 1
+-
+-			if [ "$uim_state_timeout" -lt "$timeout" ] || [ "$timeout" = "0" ]; then
+-				let uim_state_timeout++
+-				sleep 5
+-				continue
+-			fi
+-
+-			# Recovery failed
+-			proto_notify_error "$interface" SIM_ILLEGAL_STATE
+-			proto_block_restart "$interface"
+-			return 1
+-		else
+-			break
+-		fi
+-	done
+-
+-	if uqmi -s -d "$device" -t 1000 --uim-get-sim-state | grep -q '"Not supported"\|"Invalid QMI command"' &&
+-	   uqmi -s -d "$device" -t 1000 --get-pin-status | grep -q '"Not supported"\|"Invalid QMI command"' ; then
+-		[ -n "$pincode" ] && {
+-			uqmi -s -d "$device" -t 1000 --verify-pin1 "$pincode" > /dev/null || uqmi -s -d "$device" -t 1000 --uim-verify-pin1 "$pincode" > /dev/null || {
+-				echo "Unable to verify PIN"
+-				proto_notify_error "$interface" PIN_FAILED
+-				proto_block_restart "$interface"
+-				return 1
+-			}
+-		}
+-	else
+-		json_load "$(uqmi -s -d "$device" -t 1000 --get-pin-status)"
+-		json_get_var pin1_status pin1_status
+-		if [ -z "$pin1_status" ]; then
+-			json_load "$(uqmi -s -d "$device" -t 1000 --uim-get-sim-state)"
+-			json_get_var pin1_status pin1_status
+-		fi
+-		json_get_var pin1_verify_tries pin1_verify_tries
+-
+-		case "$pin1_status" in
+-			disabled)
+-				echo "PIN verification is disabled"
+-				;;
+-			blocked)
+-				echo "SIM locked PUK required"
+-				proto_notify_error "$interface" PUK_NEEDED
+-				proto_block_restart "$interface"
+-				return 1
+-				;;
+-			not_verified)
+-				[ "$pin1_verify_tries" -lt "3" ] && {
+-					echo "PIN verify count value is $pin1_verify_tries this is below the limit of 3"
+-					proto_notify_error "$interface" PIN_TRIES_BELOW_LIMIT
+-					proto_block_restart "$interface"
+-					return 1
+-				}
+-				if [ -n "$pincode" ]; then
+-					uqmi -s -d "$device" -t 1000 --verify-pin1 "$pincode" > /dev/null 2>&1 || uqmi -s -d "$device" -t 1000 --uim-verify-pin1 "$pincode" > /dev/null 2>&1 || {
+-						echo "Unable to verify PIN"
+-						proto_notify_error "$interface" PIN_FAILED
+-						proto_block_restart "$interface"
+-						return 1
+-					}
+-				else
+-					echo "PIN not specified but required"
+-					proto_notify_error "$interface" PIN_NOT_SPECIFIED
+-					proto_block_restart "$interface"
+-					return 1
+-				fi
+-				;;
+-			verified)
+-				echo "PIN already verified"
+-				;;
+-			*)
+-				echo "PIN status failed (${pin1_status:-sim_not_present})"
+-				proto_notify_error "$interface" PIN_STATUS_FAILED
+-				proto_block_restart "$interface"
+-				return 1
+-			;;
+-		esac
+-		json_cleanup
+-	fi
++	# The apid lifecycle has already completed its AT readiness and SIM/PIN
++	# phase before entering netifd. This executor owns only QMI registration and
++	# dial commands; repeating UIM diagnosis here creates a second, racy verdict.
+ 
+ 	if [ -n "$plmn" ]; then
+ 		json_load "$(uqmi -s -d "$device" -t 1000 --get-plmn)"
+@@ -397,6 +301,30 @@ proto_qmi_setup() {
+ 		}
+ 	}
+ 
++	# Complete every QMI read before the first link-up notification. The apid
++	# lifecycle gate treats that notification as the end of physical dial I/O;
++	# leaving current-settings reads below it would overlap later AT telemetry.
++	[ -n "$pdh_6" ] && [ -z "$dhcpv6" -o "$dhcpv6" = 0 ] && {
++		json_load "$(uqmi -s -d $device -t 1000 --set-client-id wds,$cid_6 --get-current-settings)"
++		json_select ipv6
++		json_get_var ip_6 ip
++		json_get_var gateway_6 gateway
++		json_get_var dns1_6 dns1
++		json_get_var dns2_6 dns2
++		json_get_var ip_prefix_length ip-prefix-length
++		json_cleanup
++	}
++	[ -n "$pdh_4" ] && [ "$dhcp" = 0 ] && {
++		json_load "$(uqmi -s -d $device -t 1000 --set-client-id wds,$cid_4 --get-current-settings)"
++		json_select ipv4
++		json_get_var ip_4 ip
++		json_get_var gateway_4 gateway
++		json_get_var dns1_4 dns1
++		json_get_var dns2_4 dns2
++		json_get_var subnet_4 subnet
++		json_cleanup
++	}
++
+ 	echo "Setting up $ifname"
+ 	proto_init_update "$ifname" 1
+ 	proto_set_keep 1
+@@ -416,13 +344,6 @@ proto_qmi_setup() {
+ 
+ 	[ -n "$pdh_6" ] && {
+ 		if [ -z "$dhcpv6" -o "$dhcpv6" = 0 ]; then
+-			json_load "$(uqmi -s -d $device -t 1000 --set-client-id wds,$cid_6 --get-current-settings)"
+-			json_select ipv6
+-			json_get_var ip_6 ip
+-			json_get_var gateway_6 gateway
+-			json_get_var dns1_6 dns1
+-			json_get_var dns2_6 dns2
+-			json_get_var ip_prefix_length ip-prefix-length
+ 
+ 			proto_init_update "$ifname" 1
+ 			proto_set_keep 1
+@@ -460,13 +381,6 @@ proto_qmi_setup() {
+ 
+ 	[ -n "$pdh_4" ] && {
+ 		if [ "$dhcp" = 0 ]; then
+-			json_load "$(uqmi -s -d $device -t 1000 --set-client-id wds,$cid_4 --get-current-settings)"
+-			json_select ipv4
+-			json_get_var ip_4 ip
+-			json_get_var gateway_4 gateway
+-			json_get_var dns1_4 dns1
+-			json_get_var dns2_4 dns2
+-			json_get_var subnet_4 subnet
+ 
+ 			proto_init_update "$ifname" 1
+ 			proto_set_keep 1

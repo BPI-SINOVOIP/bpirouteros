@@ -1,0 +1,116 @@
+bpirouter: r4-pro u-boot LEDs via i2c2 PCA9555 mux (err/act)
+
+Enable u-boot to drive the two front-panel system LEDs during provisioning.
+err (red, pca9555 IO1_7) / act (blue, IO1_6) sit behind SoC i2c2 -> pca9545
+mux(0x70) ch0 -> pca9555(0x20). LEDs are ACTIVE_HIGH (real-machine: on/off
+matched only with active-high; the SYS_LEDxn net name suggested low but the
+pca9555 drive is high-side). Add the i2c2 chain (after &i2c1) + a gpio-leds
+node to the board dtsi, and enable CMD_I2C / DM_I2C / SYS_I2C_MTK / I2C_MUX
+/ I2C_MUX_PCA954x / DM_PCA953X on all three defconfigs (LED/LED_GPIO/CMD_LED
+already on). label=act/err so the defenv can do `led act/err on`.
+--- a/arch/arm/dts/mt7988a-bananapi-bpi-r4-pro-8x.dtsi
++++ b/arch/arm/dts/mt7988a-bananapi-bpi-r4-pro-8x.dtsi
+@@ -50,6 +50,20 @@
+ 		};
+ 	};
+ 
++	leds {
++		compatible = "gpio-leds";
++
++		led-act {
++			label = "act";
++			gpios = <&pca9555 14 GPIO_ACTIVE_HIGH>;
++		};
++
++		led-err {
++			label = "err";
++			gpios = <&pca9555 15 GPIO_ACTIVE_HIGH>;
++		};
++	};
++
+ };
+ 
+ &uart0 {
+@@ -60,6 +74,32 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&i2c1_pins>;
+ 	status = "okay";
++};
++
++&i2c2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c2_1_pins>;
++	status = "okay";
++
++	pca9545: i2c-mux@70 {
++		compatible = "nxp,pca9545";
++		reg = <0x70>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		i2c@0 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <0>;
++
++			pca9555: gpio@20 {
++				compatible = "nxp,pca9555";
++				reg = <0x20>;
++				gpio-controller;
++				#gpio-cells = <2>;
++			};
++		};
++	};
+ };
+ 
+ &eth0 {
+@@ -95,6 +135,13 @@
+ 		mux {
+ 			function = "spi";
+ 			groups = "spi0", "spi0_wp_hold";
++		};
++	};
++
++	i2c2_1_pins: i2c2-pins {
++		mux {
++			function = "i2c";
++			groups = "i2c2_1";
+ 		};
+ 	};
+ 
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig
+@@ -137,3 +137,9 @@
+ CONFIG_USB_STORAGE=y
+ CONFIG_ZSTD=y
+ CONFIG_HEXDUMP=y
++CONFIG_CMD_I2C=y
++CONFIG_DM_I2C=y
++CONFIG_SYS_I2C_MTK=y
++CONFIG_I2C_MUX=y
++CONFIG_I2C_MUX_PCA954x=y
++CONFIG_DM_PCA953X=y
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig
+@@ -137,3 +137,9 @@
+ CONFIG_USB_STORAGE=y
+ CONFIG_ZSTD=y
+ CONFIG_HEXDUMP=y
++CONFIG_CMD_I2C=y
++CONFIG_DM_I2C=y
++CONFIG_SYS_I2C_MTK=y
++CONFIG_I2C_MUX=y
++CONFIG_I2C_MUX_PCA954x=y
++CONFIG_DM_PCA953X=y
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig
+@@ -137,3 +137,9 @@
+ CONFIG_USB_STORAGE=y
+ CONFIG_ZSTD=y
+ CONFIG_HEXDUMP=y
++CONFIG_CMD_I2C=y
++CONFIG_DM_I2C=y
++CONFIG_SYS_I2C_MTK=y
++CONFIG_I2C_MUX=y
++CONFIG_I2C_MUX_PCA954x=y
++CONFIG_DM_PCA953X=y

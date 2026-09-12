@@ -1,0 +1,58 @@
+arm64: dts: r4-pro: 10G WAN AS21010P (gmac1 USXGMII), no kernel reset-gpios
+
+gmac1 USXGMII to the AS21010P (phy28 @ MDIO 0x1c). No reset-gpios in the kernel
+DT on purpose: phylib cannot drive a clean reset for this firmware-loading PHY
+(as21xxx sets PHY_DETACH_NO_HW_RESET, and the reset-gpios are only ever acquired
+deasserted), so the PHY is reset in u-boot board_late_init instead (see the
+u-boot z13-bpirouter-wan-phy-reset patch) and Linux always probes a freshly
+reset PHY that then reloads its firmware. The c45-id byte-swap seen during
+bring-up is a MediaTek MDIO read artifact (unrelated to reset), handled by the
+read-twice workaround (kernel 985/986); the mdio scan is delayed (kernel 997)
+so the c45 id is ready when get_phy_c45_ids probes it.
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -201,6 +201,44 @@
+ 	};
+ };
+ 
++&eth {
++	pinctrl-names = "default";
++	pinctrl-0 = <&mdio0_pins>;
++};
++
++&gmac1 {
++	phy-mode = "usxgmii";
++	phy-connection-type = "usxgmii";
++	phy-handle = <&phy_10g_wan>;
++	status = "okay";
++};
++
++&mdio_bus {
++	/* AS21010P 10G WAN PHY at 0x1c. No reset-gpios here: phylib can't cleanly
++	 * reset this firmware PHY, so it is reset in u-boot (board_late_init, see
++	 * u-boot z13). The c45-id byte-swap is an MTK MDIO read artifact (985/986),
++	 * not reset; the mdio scan is delayed (kernel 997) for c45-id readiness. */
++	phy_10g_wan: ethernet-phy@1c {
++		compatible = "ethernet-phy-ieee802.3-c45";
++		reg = <0x1c>;
++		firmware-name = "as21x1x_fw.bin";
++	};
++};
++
++&pio {
++	mdio0_pins: mdio0-pins {
++		mux {
++			function = "eth";
++			groups = "mdc_mdio0";
++		};
++	};
++
++	wan_combo_copper_hog {
++		gpio-hog;
++		gpios = <3 GPIO_ACTIVE_HIGH>;
++		output-low;
++	};
++};
+ &i2c2 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&i2c2_1_pins>;

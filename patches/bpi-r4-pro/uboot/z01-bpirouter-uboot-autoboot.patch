@@ -1,0 +1,45 @@
+diff -aurN u-boot-2025.10.ori/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig u-boot-2025.10/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig
+--- u-boot-2025.10.ori/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig	2026-03-31 02:10:56.013045438 +0000
++++ u-boot-2025.10/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig	2026-04-07 08:29:56.112161883 +0000
+@@ -19,9 +19,9 @@
+ CONFIG_DEBUG_UART=y
+ CONFIG_AHCI=y
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7988a-bpi-r4-pro-8x-emmc.dtb"
+ CONFIG_SYS_CBSIZE=512
+diff -aurN u-boot-2025.10.ori/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig u-boot-2025.10/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig
+--- u-boot-2025.10.ori/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig	2026-03-31 02:10:56.013045438 +0000
++++ u-boot-2025.10/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig	2026-04-07 08:30:17.185697597 +0000
+@@ -19,9 +19,9 @@
+ CONFIG_DEBUG_UART=y
+ CONFIG_AHCI=y
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7988a-bpi-r4-pro-8x-sd.dtb"
+ CONFIG_SYS_CBSIZE=512
+diff -aurN u-boot-2025.10.ori/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig u-boot-2025.10/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig
+--- u-boot-2025.10.ori/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig	2026-03-31 02:10:56.013045438 +0000
++++ u-boot-2025.10/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig	2026-04-07 08:30:26.250348653 +0000
+@@ -16,9 +16,9 @@
+ CONFIG_DEBUG_UART=y
+ CONFIG_AHCI=y
+ CONFIG_FIT=y
+-CONFIG_BOOTDELAY=30
++CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_AUTOBOOT_STOP_STR=" "
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7988a-bpi-r4-pro-8x-emmc.dtb"
+ CONFIG_SYS_CBSIZE=512

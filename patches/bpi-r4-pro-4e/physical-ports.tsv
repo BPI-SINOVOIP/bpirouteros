@@ -1,0 +1,11 @@
+panel	label	controller	port	role	media
+ETH1	mxl_lan0	mxl	1	lan	both
+ETH2	mxl_lan1	mxl	2	lan	both
+ETH3	mxl_lan2	mxl	3	lan	both
+ETH4	mxl_lan3	mxl	4	lan	both
+LAN-SFP+	sfp-lan	mxl	13	lan	both
+ETH5	lan1	internal	0	lan	both
+ETH6	lan3	internal	2	lan	both
+ETH8	lan4	internal	3	unassigned	both
+ETH7	wan	gmac	1	wan	copper
+WAN-SFP+	wan	gmac	1	wan	sfp

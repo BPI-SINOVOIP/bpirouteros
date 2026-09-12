@@ -1,0 +1,42 @@
+Enable the xHCI host the three M.2 Key-B slots hang off.
+
+The SoC dtsi ships both USB controllers disabled and the board DTS never turned
+one on, so /sys/bus/usb/devices was empty and none of the three installed 5G
+modules could be seen -- which looks exactly like a modem, SIM or antenna fault
+and is neither. There was no USB host at all.
+
+ssusb1 is the right one: it takes the *_CK_P1 clocks, and the schematic
+(BPI-R4Pro-V10-SCH-20250806, "USB3.2 HUB" / "M.2 KEY B(5G) x3") routes SSUSB_P1
+into the VL822-Q7 hub feeding all three M.2 slots and the Type-A socket. ssusb0
+is muxed with PCIE_1L_0 and is a different path.
+
+Slot power, voltage select and reset are on the PCA9555 at i2c1 0x20 and are not
+part of this patch.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -456,3 +456,24 @@
+ 		};
+ 	};
+ };
++
++/* USB host for the three M.2 Key-B slots.
++ *
++ * The SoC dtsi leaves both xHCI controllers disabled and the board DTS never
++ * turned one on, so /sys/bus/usb/devices was empty and no module could be seen
++ * at all -- not a modem, SIM or antenna problem, there was simply no host.
++ *
++ * ssusb1 is the one: it takes the *_CK_P1 clocks, and the schematic routes
++ * SSUSB_P1 into the VL822-Q7 USB 3.2 hub that feeds all three M.2 Key-B slots
++ * and the Type-A socket. ssusb0 is muxed with PCIE_1L_0 and is not this path.
++ *
++ * Slot power (BKEY-x-PDN), voltage select (BKEY-x-Vset) and reset (BKEY-x-RST)
++ * hang off the PCA9555 at i2c1 0x20; they are handled separately.
++ */
++&ssusb1 {
++	status = "okay";
++};
++
++&tphy {
++	status = "okay";
++};

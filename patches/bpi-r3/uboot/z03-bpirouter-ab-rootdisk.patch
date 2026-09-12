@@ -1,0 +1,41 @@
+A/B: pick eMMC rootdisk by `active_slot` env var (mt7986: R3 / R3-mini).
+
+ft_system_setup() (from 311-mt7986-select-rootdisk) maps the boot medium
+to a /chosen/rootdisk-<media> phandle. For eMMC, also honour the
+`active_slot` env: a -> rootdisk-emmc-a, b -> rootdisk-emmc-b (both added
+to the eMMC DT overlay). Falls back to slot A when unset, so
+a non-A/B / unprovisioned env still boots. Exact strcmp (not slot[0]) keeps
+this consistent with the env's `ab_setpart` (`test "$active_slot" = b`): a
+malformed active_slot then falls back to slot A on BOTH sides instead of
+mismatching (kernel from one slot, rootdisk phandle from the other).
+
+The same selection publishes /chosen/bpirouter,booted-slot as an immutable
+boot-time fact. Linux OTA code compares it with the mutable environment and
+refuses all slot writes when either value is absent or they disagree.
+
+--- a/board/mediatek/mt7986/mt7986_rfb.c
++++ b/board/mediatek/mt7986/mt7986_rfb.c
+@@ -55,8 +55,23 @@ int ft_system_setup(void *blob, struct bd_info *bd)
+ 		media = "rootdisk-spim-nand";
+ 		break
+ 		;;
+ 	case MT7986_BOOT_EMMC:
+ 		media = "rootdisk-emmc";
++		{
++			const char *slot = env_get("active_slot");
++			const char *booted_slot = "a";
++
++			if (slot && !strcmp(slot, "b")) {
++				media = "rootdisk-emmc-b";
++				booted_slot = "b";
++			} else {
++				media = "rootdisk-emmc-a";
++			}
++			chosen = fdt_path_offset(blob, "/chosen");
++			if (chosen > 0)
++				fdt_setprop_string(blob, chosen,
++						   "bpirouter,booted-slot", booted_slot);
++		}
+ 		break
+ 		;;
+ 	case MT7986_BOOT_SNFI_NAND:

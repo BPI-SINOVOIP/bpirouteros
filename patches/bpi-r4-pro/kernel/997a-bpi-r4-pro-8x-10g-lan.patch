@@ -1,0 +1,62 @@
+arm64: dts: r4-pro: enable 10G LAN combo on upstream MxL port13
+
+Add the second RJ45/SFP combo as a LAN user port. The former vendor driver
+numbered the four routed GPHYs as 0..3, the CPU port as 8 and this SerDes as
+port12. The upstream driver numbers the same resources 1..4, 9 and 13. Port13
+is the second XPCS anchor, for which the upstream phylink implementation
+already advertises USXGMII and 10G capability, including the compatibility
+path for the installed pre-1.0.84 switch firmware.
+
+The upstream 802.1Q tag driver sizes CPU ingress EVLAN from the actual DSA user
+port count, so the fixed phy_ports*2+1 allocation which rejected this port in
+the former vendor stack is not carried forward. Keep the combo pinned to its
+copper AS21010P for this first enablement; SFP mux switching is a separate
+runtime feature. The PHY reset is performed in u-boot with the WAN PHY, before
+Linux probes either device.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -307,6 +307,14 @@
+ 		reg = <0x1c>;
+ 		firmware-name = "as21x1x_fw.bin";
+ 	};
++
++	/* AS21010P on the LAN-side RJ45/SFP combo. It is reset in u-boot rather
++	 * than by phylib; see z13-bpirouter-wan-phy-reset. */
++	phy_10g_lan: ethernet-phy@18 {
++		compatible = "ethernet-phy-ieee802.3-c45";
++		reg = <0x18>;
++		firmware-name = "as21x1x_fw.bin";
++	};
+ };
+ 
+ &pio {
+@@ -326,6 +334,13 @@
+ 		gpios = <3 GPIO_ACTIVE_HIGH>;
+ 		output-low;
+ 	};
++
++	/* Pin the LAN combo to the populated copper AS21010P path. */
++	lan_combo_copper_hog {
++		gpio-hog;
++		gpios = <54 GPIO_ACTIVE_HIGH>;
++		output-high;
++	};
+ };
+ &gmac2 {
+ 	phy-mode = "10gbase-r";
+@@ -386,6 +401,14 @@
+ 				phy-handle = <&switchphy3>;
+ 				phy-mode = "internal";
+ 			};
++			mxl_port13: port@13 {
++				reg = <13>;
++				label = "mxl_lan4";
++				phy-mode = "usxgmii";
++				managed = "in-band-status";
++				phy-handle = <&phy_10g_lan>;
++			};
++
+ 			mxl_cpu: port@9 {
+ 				reg = <9>;
+ 				label = "cpu";

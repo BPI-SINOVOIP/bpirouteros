@@ -1,0 +1,48 @@
+diff --git a/package/network/config/netifd/patches/901-bpirouter-proto-busy.patch b/package/network/config/netifd/patches/901-bpirouter-proto-busy.patch
+new file mode 100644
+--- /dev/null
++++ b/package/network/config/netifd/patches/901-bpirouter-proto-busy.patch
+@@ -0,0 +1,43 @@
++diff --git a/proto.h b/proto.h
++--- a/proto.h
+++++ b/proto.h
++@@ -54,3 +54,5 @@
++ 	int (*cb)(struct interface_proto_state *, enum interface_proto_cmd cmd, bool force);
+++	/* Read-only execution status; no additional lifecycle state. */
+++	bool (*busy)(struct interface_proto_state *);
++ 	void (*free)(struct interface_proto_state *);
++ };
++diff --git a/proto-shell.c b/proto-shell.c
++--- a/proto-shell.c
+++++ b/proto-shell.c
++@@ -91,5 +91,15 @@
++ 	struct list_head deps;
++ };
++ 
+++static bool
+++proto_shell_busy(struct interface_proto_state *proto)
+++{
+++	struct proto_shell_state *state = container_of(proto, struct proto_shell_state, proto);
+++
+++	/* A live DHCP daemon is expected when up, not a pending modem command. */
+++	return state->sm != S_IDLE || state->script_task.uloop.pending ||
+++		(proto->iface->state != IFS_UP && state->proto_task.uloop.pending);
+++}
+++
++ static void
++ proto_shell_check_dependencies(struct proto_shell_state *state)
++@@ -872,3 +872,4 @@
++ 	state->proto.notify = proto_shell_notify;
++ 	state->proto.cb = proto_shell_handler;
+++	state->proto.busy = proto_shell_busy;
++ 	state->teardown_timeout.cb = proto_shell_teardown_timeout_cb;
++diff --git a/ubus.c b/ubus.c
++--- a/ubus.c
+++++ b/ubus.c
++@@ -813,3 +813,6 @@
++ 	blobmsg_add_u8(&b, "up", iface->state == IFS_UP);
++ 	blobmsg_add_u8(&b, "pending", iface->state == IFS_SETUP);
+++	blobmsg_add_u8(&b, "bpir_proto_busy",
+++		iface->state == IFS_SETUP || iface->state == IFS_TEARDOWN ||
+++		(iface->proto && iface->proto->busy && iface->proto->busy(iface->proto)));
++ 	blobmsg_add_u8(&b, "available", iface->available);

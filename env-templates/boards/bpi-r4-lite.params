@@ -1,0 +1,17 @@
+# bpi-r4-lite u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.6.3).
+# Family-1 (eMMC SD->NAND->eMMC); shares the mt7987 SoC constants. A/B product env
+# drops NOR + boot_update_conf + bootmenu/recovery (R4-Lite product runs eMMC),
+# only SD->NAND->eMMC + A/B (mirrors the R3 family-1 decision).
+SOC_ENV=mt7987                                            # source ../soc/mt7987.params
+DTBBASE=mt7987a-bananapi-bpi-r4-lite                      # config-/overlay base (dash form)
+IMGPREFIX=openwrt-mediatek-filogic-bananapi_bpi-r4-lite   # bootfile prefix (underscore form)
+DEFENV_BASE=bananapi_bpi-r4-lite                          # defenvs/<DEFENV_BASE>_<medium>_env
+MEDIA="emmc sdmmc snand"                                  # media this board generates
+BOOTLED_PWR=blue:status                                   # u-boot LED label (z05 gpio-led on pio13); physical LED is BLUE (label now matches)
+BOOTLED_REC=blue:status                                   # r4-lite has ONE status LED -> reuse it
+BOOTCONF_EXTRA=mt7987a-bananapi-bpi-r4-lite-1pcie-2L      # PCIe 2-lane overlay: required for the BE14 Wi-Fi (mux GPIO11)
+# Provisioning LED — R4-Lite has only ONE u-boot GPIO LED (pio13, physical BLUE,
+# label blue:status). Like r4-pro but single LED: writing flash = on;
+# success = off; fail = stays on (judge via serial).
+LED_WRITING='led $bootled_pwr on ; '
+PROV_DONE=' ; if test $? = 0 ; then led $bootled_pwr off ; fi'

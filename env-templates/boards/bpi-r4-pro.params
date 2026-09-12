@@ -1,0 +1,15 @@
+# bpi-r4-pro (BPI-R4 Pro 8X) u-boot defenv params (FIRMWARE_ROLLBACK.md §10.6).
+# Same MT7988A SoC as r4 -> reuses ../soc/mt7988.params. A new board = new params
+# + vendored pristine; no template edits.
+SOC_ENV=mt7988                                              # ../soc/mt7988.params (LOADADDR/BOOTARGS_BASE/NAND geom)
+DTBBASE=mt7988a-bananapi-bpi-r4-pro-8x                      # config-/overlay base (dash form)
+IMGPREFIX=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-8x   # bootfile prefix (underscore form)
+DEFENV_BASE=bananapi_bpi-r4-pro-8x                          # defenvs/<DEFENV_BASE>_<medium>_env
+MEDIA="emmc sdmmc snand"                                    # media this board generates
+BOOTLED_PWR=act                                    # u-boot LED label (PCA9555 LED not wired yet; non-fatal)
+BOOTLED_REC=err                                     # u-boot LED label (non-fatal warning if absent)
+BOOTCONF_EXTRA=                                             # no extra DT overlay
+# err/act system LEDs (pca9555). Writing flash = both on; fault = err on.
+LED_WRITING='led act on ; led err on ; '   # prepend: lit while writing NAND/eMMC
+PROV_DONE=' ; if test $? = 0 ; then led act off ; led err off ; else led act off ; led err on ; fi'  # success: both off; fail: err red
+LED_FAULT='led err on ; '                  # prepend: A/B fallback fault -> err

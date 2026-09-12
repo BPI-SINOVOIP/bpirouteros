@@ -1,0 +1,39 @@
+mediatek: package the 4E MxL stack for normal module autoload
+
+4E has no external AS21 PHY preparation dependency. Use standard kmodloader
+once during boot; no switch rebind service or runtime retry loop.
+
+diff --git a/package/kernel/linux/modules/netdevices.mk b/package/kernel/linux/modules/netdevices.mk
+index 9fd55df..75e39a1 100644
+--- a/package/kernel/linux/modules/netdevices.mk
++++ b/package/kernel/linux/modules/netdevices.mk
+@@ -654,6 +654,29 @@ endef
+ 
+ $(eval $(call KernelPackage,dsa))
+ 
++
++define KernelPackage/dsa-mxl862xx
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=MaxLinear MxL862xx managed switch DSA support
++  DEPENDS:=+kmod-dsa +kmod-lib-crc16
++  KCONFIG:= \
++	CONFIG_NET_DSA_MXL862 \
++	CONFIG_NET_DSA_TAG_MXL_862XX \
++	CONFIG_NET_DSA_TAG_MXL_862XX_8021Q
++  AUTOLOAD:=$(call AutoLoad,18,mxl862xx_dsa)
++  FILES:= \
++	$(LINUX_DIR)/drivers/net/dsa/mxl862xx/mxl862xx_dsa.ko \
++	$(LINUX_DIR)/net/dsa/tag_mxl862xx.ko \
++	$(LINUX_DIR)/net/dsa/tag_mxl862xx_8021q.ko
++endef
++
++define KernelPackage/dsa-mxl862xx/description
++  Kernel module support for MaxLinear MxL86252 and MxL86282 switches.
++  It is loaded by kmodloader on the 4E, without AS21 PHY preparation.
++endef
++
++$(eval $(call KernelPackage,dsa-mxl862xx))
++
+ 
+ define KernelPackage/dsa-notag
+   SUBMENU:=$(NETWORK_DEVICES_MENU)

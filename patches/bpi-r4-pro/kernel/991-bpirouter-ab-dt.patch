@@ -1,0 +1,27 @@
+A/B: declare the second eMMC slot partition and rootdisk phandles.
+
+Adds a `production_b` GPT partition node (matched by partname) and
+/chosen rootdisk-emmc-a / rootdisk-emmc-b phandles so u-boot's
+ft_system_setup can point /chosen/rootdisk at the active slot.
+`production` stays slot A (rootdisk-emmc-a == rootdisk-emmc) for
+back-compat.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-emmc.dtso
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-emmc.dtso
+@@ -45,6 +45,10 @@
+ 			emmc_rootfs: block-partition-production {
+ 				partname = "production";
+ 			};
++
++			emmc_rootfs_b: block-partition-production_b {
++				partname = "production_b";
++			};
+ 		};
+ 	};
+ };
+@@ -54,3 +58,5 @@
+ &{/chosen} {
+ 	rootdisk-emmc = <&emmc_rootfs>;
++	rootdisk-emmc-a = <&emmc_rootfs>;
++	rootdisk-emmc-b = <&emmc_rootfs_b>;
+ };

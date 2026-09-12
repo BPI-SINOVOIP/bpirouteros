@@ -1,0 +1,35 @@
+mtk_uartboot — third-party tool, vendored unmodified, AGPL-3.0-only.
+
+  Upstream : https://github.com/981213/mtk_uartboot
+  Release  : v0.1.1
+  Retrieved: 2026-08-04
+
+  Binary   mtk_uartboot            (from mtk_uartboot-v0.1.1-x86_64-unknown-linux-gnu.tar.gz)
+           sha256 1bc689d771bd92ffcad30c75234cd2c74fea2482f06a4c2e9884965d5ce6e2ea
+           asset  sha256 01e2c4ba2ac7fd3c631712622b5f0bb60ca0a11f5a12d47b3cc44a035f07a5f0
+  Source   mtk_uartboot-v0.1.1-src.tar.gz  (github archive of tag v0.1.1)
+           sha256 aabff77ccd52ca5bc32cad03aa1d64e3568418f9c94883f8e8043a50f05ac65c
+  Licence  LICENSE-mtk_uartboot-AGPL-3.0.txt  (AGPLv3 full text)
+           sha256 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0
+
+The source accompanies the binary so that conveying the kit satisfies AGPL-3.0
+section 6. The tool is a separate, independent program invoked from a shell --
+BpiRouter neither links against it nor derives from it, so it is an aggregate
+under section 5 and its licence does not extend to the rest of this kit.
+
+Two things worth knowing before relying on this:
+
+  - The v0.1.1 tag archive carries no LICENCE file (upstream added it later).
+    The AGPLv3 text shipped here was taken from the repository's main branch;
+    Cargo.toml at v0.1.1 does declare `license = "AGPL-3.0-only"`.
+  - The source archive is upstream's own tree, which pins every dependency
+    exactly via Cargo.lock but does not contain them. A build needs crates.io
+    reachable. Run `cargo vendor` against this tree if a fully offline,
+    dependency-complete corresponding source is ever required.
+
+Host requirement: x86_64 Linux. The binary is static-pie linked, so it needs no
+runtime libraries, but it is NOT portable to arm64 hosts -- build from the
+bundled source or fetch the matching upstream asset if flashing from one.
+
+Used by RUNBOOK-r3mini.md and RUNBOOK-openwrt-one.md to push the BL2 payload
+over UART on boards that cannot be provisioned from SD (archetypes 2 and 3).

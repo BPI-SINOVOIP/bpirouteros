@@ -1,0 +1,80 @@
+#!/bin/sh
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# Bring /etc/config/sqm to BpiRouter's canonical state on first boot.
+#
+# sqm is one of the two configs the product manages as a WHOLE FILE (mwan3 is
+# the other): tc qdiscs are a per-netdev root resource, so a second writer does
+# not add an independent object, it produces an undefined shaping plane.  The
+# backend therefore refuses to serve any sqm state it did not write.  That
+# refusal is only safe if the shipped state is a product state to begin with --
+# the upstream sqm-scripts package installs a `queue 'eth1'` example that the
+# backend reads as foreign, which takes QoS down before the user touches it.
+#
+# The decision is "is this OURS", not "is this that one known upstream file".
+# Matching a frozen upstream hash would break the moment sqm-scripts changes a
+# byte, and would still miss every other way a foreign queue can arrive (LuCI,
+# a hand-edit, another package).  The strict reader decides instead:
+#
+#   product state (including the empty initial state) -> keep, zero writes
+#   anything else                                     -> reset to canonical
+#
+# Resetting foreign content is legitimate only because the product owns this
+# file exclusively: the LuCI SQM app is not shipped, so reaching it means going
+# around the product's management plane on purpose.
+
+umask 077
+
+# Canonical sqm is an EMPTY file: unlike mwan3, sqm needs no globals section to
+# be a complete initial state.  The hash is a self-check on what this script
+# writes, not a fingerprint of any upstream file.
+CANONICAL_SHA256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+CONFIG=${BPIR_SQM_CONFIG:-/etc/config/sqm}
+LOGGER=${BPIR_LOGGER_BIN:-logger}
+STRICT_AWK=${BPIR_SQM_STRICT_AWK:-/usr/libexec/bpirouter-sqm-strict.awk}
+
+fail() {
+	"$LOGGER" -t bpirouter-sqm-canonical -- "$1" 2>/dev/null || true
+	printf '%s\n' "bpirouter-sqm-canonical: $1" >&2
+	exit 1
+}
+
+[ -f "$CONFIG" ] || fail "sqm config is missing or not a regular file"
+[ ! -L "$CONFIG" ] || fail "refusing symlinked sqm config"
+[ -f "$STRICT_AWK" ] && [ ! -L "$STRICT_AWK" ] || fail "strict sqm reader is unavailable"
+
+# A product state -- the empty initial one, or a live queue this device is
+# already shaping with -- is left byte-for-byte alone.  uci-defaults reruns
+# after a config-preserving sysupgrade, and rewriting here would silently
+# delete the user's QoS configuration on every upgrade.
+if { printf '%s\n' "package 'sqm'"; cat "$CONFIG"; } | awk -f "$STRICT_AWK"; then
+	exit 0
+fi
+
+dir=${CONFIG%/*}
+base=${CONFIG##*/}
+[ "$dir" != "$CONFIG" ] || dir=.
+[ -d "$dir" ] || fail "sqm config directory is missing"
+
+tmp=$(mktemp "$dir/.${base}.bpirouter.XXXXXX") || fail "cannot create private replacement"
+cleanup() { [ -z "$tmp" ] || rm -f "$tmp"; }
+trap cleanup EXIT HUP INT TERM
+
+: >"$tmp" || fail "cannot write canonical sqm state"
+chmod 0600 "$tmp" || fail "cannot protect replacement"
+
+replacement=$(sha256sum "$tmp" 2>/dev/null) || fail "cannot hash replacement"
+replacement=${replacement%%[[:space:]]*}
+[ "$replacement" = "$CANONICAL_SHA256" ] || fail "embedded canonical state failed its hash contract"
+
+"$LOGGER" -t bpirouter-sqm-canonical -- \
+	"replacing non-product sqm state with the canonical empty state" 2>/dev/null || true
+
+mv -f "$tmp" "$CONFIG" || fail "cannot publish canonical sqm state"
+tmp=
+
+readback=$(sha256sum "$CONFIG" 2>/dev/null) || fail "cannot read back canonical sqm state"
+readback=${readback%%[[:space:]]*}
+[ "$readback" = "$CANONICAL_SHA256" ] || fail "canonical sqm readback mismatch"
+
+trap - EXIT HUP INT TERM
+exit 0

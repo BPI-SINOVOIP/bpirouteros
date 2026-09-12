@@ -1,0 +1,84 @@
+BpiRouter UI — Licence
+
+Copyright (c) 2026 Ning.
+Contact: mimallaus@gmail.com
+
+⚠️ THIS REPOSITORY IS MIXED-LICENCE. Read LICENSING.md first.
+
+The terms below apply ONLY to the proprietary payload identified in
+LICENSING.md — that is, the generated contents of net/bpirouter-ui/files/
+(the bpirouter-apid binary and the web interface assets).
+
+They do NOT apply to, and cannot restrict:
+
+  - net/bpirouter-ui/Makefile
+  - net/bpirouter-base/Makefile
+  - net/bpirouter-base/files/**
+
+Those are the recipes that control compilation and installation inside the
+OpenWrt build system, and GNU GPL v2 section 3 requires them to be available as
+part of the corresponding source. They are licensed GPL-2.0, and nothing here
+adds a further restriction to them, because GNU GPL v2 section 6 does not permit
+it.
+
+
+1. SCOPE (PROPRIETARY PAYLOAD ONLY)
+
+Permission is granted, free of charge, to use the proprietary payload — the
+bpirouter-apid binary and the web interface assets — for personal, educational,
+non-commercial and internal testing purposes.
+
+
+2. RESTRICTIONS (PROPRIETARY PAYLOAD ONLY)
+
+Without prior written authorisation you may not:
+
+(a) redistribute, sublicense, package or sell the proprietary payload, in whole
+    or in part, as part of a commercial product, appliance or service;
+(b) reverse-engineer, decompile or unpack the proprietary web interface assets
+    in order to create a white-labelled or derivative commercial product.
+
+These restrictions apply to the payload only. They do not, and cannot, restrict
+what you may do with the package recipes, the firmware images, or any
+GPL-covered component — those carry their own licences, whose freedoms include
+commercial use and redistribution.
+
+
+3. TRADEMARKS AND BRANDING
+
+The BpiRouter name, logo and brand identifiers are not licensed by this or any
+other software licence in this repository. Copyright licences, including the
+GPL, do not grant trademark rights, so reserving them creates no conflict.
+
+You may not present a derivative product as a BpiRouter product, or retain our
+branding on one, without written authorisation. This restricts the use of our
+marks; it does not restrict modifying or redistributing any GPL-covered code,
+including the package recipes in this repository.
+
+
+4. FREE SOFTWARE OBLIGATIONS
+
+Firmware containing this software also contains software under the GNU General
+Public License and other free software licences. The corresponding source for
+those components is provided as described in
+the README supplied with this source.
+
+If any term in this file were ever read as conflicting with an obligation under
+those licences, the free software licence prevails and this file is to be read
+as not applying to the material in question.
+
+
+5. OEM AND COMMERCIAL LICENSING
+
+For commercial redistribution, white-labelling (OEM) rights, or access to the
+proprietary source, a separate commercial licence is required. Contact the
+copyright holder.
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,0 +1,48 @@
+Enable env-backed u-boot bootcount on BPI-R4 (A/B rollback foundation).
+
+With CONFIG_BOOTCOUNT_LIMIT + _ENV + _ALTBOOTCMD, autoboot increments a
+boot counter stored in the u-boot env (gated by the `upgrade_available`
+env var, so normal boots neither count nor write flash) and runs
+`altbootcmd` instead of `bootcmd` once the counter exceeds the env
+`bootlimit`. This is the mechanism the A/B slot-switch logic builds on.
+
+Enabled on all three R4 media defconfigs so the mechanism can be
+validated quickly on the SD u-boot (fast reflash) before being wired
+into the eMMC product env.
+
+--- a/configs/mt7988a_bananapi_bpi-r4-emmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-emmc_defconfig
+@@ -20,6 +20,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7988a-bpi-r4-emmc.dtb"
+ CONFIG_SYS_CBSIZE=512
+--- a/configs/mt7988a_bananapi_bpi-r4-sdmmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-sdmmc_defconfig
+@@ -20,6 +20,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7988a-bpi-r4-sd.dtb"
+ CONFIG_SYS_CBSIZE=512
+--- a/configs/mt7988a_bananapi_bpi-r4-snand_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-snand_defconfig
+@@ -17,6 +17,9 @@
+ CONFIG_BOOTDELAY=1
+ CONFIG_AUTOBOOT_KEYED=y
+ CONFIG_AUTOBOOT_STOP_STR=" "
++CONFIG_BOOTCOUNT_LIMIT=y
++CONFIG_BOOTCOUNT_ENV=y
++CONFIG_BOOTCOUNT_ALTBOOTCMD=y
+ CONFIG_OF_SYSTEM_SETUP=y
+ CONFIG_DEFAULT_FDT_FILE="mediatek/mt7988a-bpi-r4-emmc.dtb"
+ CONFIG_SYS_CBSIZE=512

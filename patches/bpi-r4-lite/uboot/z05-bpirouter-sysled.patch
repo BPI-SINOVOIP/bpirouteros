@@ -1,0 +1,97 @@
+Provisioning LED: expose the SYS LED (GPIO13) as a u-boot gpio-led (R4-Lite).
+
+The board's SYS LED is on SoC GPIO13 (ball B13, fn GPIO13/PWM0), driven via a
+SOT23 buffer, active-high ("Pull High: Enable LED", BPI-R4-Lite-V11 schematic;
+confirmed on-board: `led blue:status off` darkens, `on` lights). The physical
+LED is BLUE (the kernel DT also labels it color=BLUE); the label is blue:status.
+The kernel drives this same pin as the PWM act_led, but u-boot has no LED_PWM, so
+the A/B provisioning env's `led blue:status on/off` found no LED.
+
+Add a gpio-leds node on <&pio 13 GPIO_ACTIVE_HIGH> labelled blue:status to each
+media DT so u-boot (LED_GPIO) can blink it through the SD->NAND->eMMC hops.
+- default-state = "off": the pin is strapped high (LED on) at power-on; without
+  this the gpio-led isn't probed until the first `led` command, leaving it lit
+  the whole time. default-state forces an early probe that drives it off, so the
+  env's `led ... on` at provisioning-done is a meaningful indicator.
+- &pwm disabled: its default pinctrl (pwm_pins) muxes GPIO13/PWM0 to PWM, so the
+  PWM driver steals pin 13 from the gpio-led on probe. u-boot needs no PWM (its
+  only consumer &fan is disabled); the kernel re-enables PWM via its own DT.
+
+--- a/arch/arm/dts/mt7987a-bpi-r4-lite-emmc.dts
++++ b/arch/arm/dts/mt7987a-bpi-r4-lite-emmc.dts
+@@ -27,4 +27,23 @@
+ 			debounce-interval = <10>;
+ 		};
+ 	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		/* SYS LED on GPIO13 (PWM0) — driven as plain GPIO in u-boot so the
++		 * provisioning env can blink it; kernel uses the same pin as pwm act_led.
++		 * default-state=off so it is actively driven off at startup (the pin is
++		 * strapped high = LED on at power-on); the env lights it when done. */
++		led_status_blue: led-blue {
++			label = "blue:status";
++			gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++	};
++};
++
++&pwm {
++	/* free GPIO13/PWM0 for the SYS gpio-led above; u-boot needs no PWM */
++	status = "disabled";
+ };
+--- a/arch/arm/dts/mt7987a-bpi-r4-lite-sd.dts
++++ b/arch/arm/dts/mt7987a-bpi-r4-lite-sd.dts
+@@ -27,4 +27,23 @@
+ 			debounce-interval = <10>;
+ 		};
+ 	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		/* SYS LED on GPIO13 (PWM0) — driven as plain GPIO in u-boot so the
++		 * provisioning env can blink it; kernel uses the same pin as pwm act_led.
++		 * default-state=off so it is actively driven off at startup (the pin is
++		 * strapped high = LED on at power-on); the env lights it when done. */
++		led_status_blue: led-blue {
++			label = "blue:status";
++			gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++	};
++};
++
++&pwm {
++	/* free GPIO13/PWM0 for the SYS gpio-led above; u-boot needs no PWM */
++	status = "disabled";
+ };
+--- a/arch/arm/dts/mt7987a-bpi-r4-lite-spim-nand.dts
++++ b/arch/arm/dts/mt7987a-bpi-r4-lite-spim-nand.dts
+@@ -27,4 +27,23 @@
+ 			debounce-interval = <10>;
+ 		};
+ 	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		/* SYS LED on GPIO13 (PWM0) — driven as plain GPIO in u-boot so the
++		 * provisioning env can blink it; kernel uses the same pin as pwm act_led.
++		 * default-state=off so it is actively driven off at startup (the pin is
++		 * strapped high = LED on at power-on); the env lights it when done. */
++		led_status_blue: led-blue {
++			label = "blue:status";
++			gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++	};
++};
++
++&pwm {
++	/* free GPIO13/PWM0 for the SYS gpio-led above; u-boot needs no PWM */
++	status = "disabled";
+ };

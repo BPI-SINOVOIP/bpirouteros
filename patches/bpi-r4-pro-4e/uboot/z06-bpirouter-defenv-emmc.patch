@@ -1,0 +1,90 @@
+--- a/defenvs/bananapi_bpi-r4-pro-4e_emmc_env
++++ b/defenvs/bananapi_bpi-r4-pro-4e_emmc_env
+@@ -1,57 +1,46 @@
+-ipaddr=192.168.1.1
+-serverip=192.168.1.254
++ipaddr=10.1.1.3
++serverip=10.1.1.1
+ loadaddr=0x50000000
+-bootargs=console=ttyS0,115200n1 pci=pcie_bus_perf root=/dev/fit0 rootwait
+-bootcmd=if pstore check ; then run boot_recovery ; else run boot_emmc ; fi
++bootargs=console=ttyS0,115200n1 pci=pcie_bus_perf root=/dev/fit0 rootwait panic=3
+ bootconf=config-mt7988a-bananapi-bpi-r4-pro-4e
+ bootconf_base=config-mt7988a-bananapi-bpi-r4-pro-4e
+ bootconf_emmc=mt7988a-bananapi-bpi-r4-pro-4e-emmc
+ bootconf_extra=
+-bootdelay=0
+-bootfile=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-4e-initramfs-recovery.itb
++bootdelay=1
+ bootfile_bl2=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-4e-emmc-preloader.bin
+ bootfile_fip=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-4e-emmc-bl31-uboot.fip
+-bootfile_upg=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-4e-squashfs-sysupgrade.itb
+-bootled_pwr=green:status
+-bootled_rec=blue:status
+-bootmenu_confirm_return=askenv - Press ENTER to return to menu ; bootmenu 60
+-bootmenu_default=0
+-bootmenu_delay=0
+-bootmenu_title=      [0;34m( ( ( [1;39mOpenWrt[0;34m ) ) )  [0;36m[eMMC][0m
+-bootmenu_0=Initialize environment.=run _firstboot
+-bootmenu_0d=Run default boot command.=run boot_default
+-bootmenu_1=Boot system via TFTP.=run boot_tftp ; run bootmenu_confirm_return
+-bootmenu_2=Boot production system from eMMC.=run boot_production ; run bootmenu_confirm_return
+-bootmenu_3=Boot recovery system from eMMC.=run boot_recovery ; run bootmenu_confirm_return
+-bootmenu_4=Load production system via TFTP then write to eMMC.=setenv noboot 1 ; setenv replacevol 1 ; run boot_tftp_production ; setenv noboot ; setenv replacevol ; run bootmenu_confirm_return
+-bootmenu_5=Load recovery system via TFTP then write to eMMC.=setenv noboot 1 ; setenv replacevol 1 ; run boot_tftp_recovery ; setenv noboot ; setenv replacevol ; run bootmenu_confirm_return
+-bootmenu_6=[31mLoad BL31+U-Boot FIP via TFTP then write to eMMC.[0m=run boot_tftp_write_fip ; run bootmenu_confirm_return
+-bootmenu_7=[31mLoad BL2 preloader via TFTP then write to eMMC.[0m=run boot_tftp_write_bl2 ; run bootmenu_confirm_return
+-bootmenu_8=Reboot.=reset
+-bootmenu_9=Reset all settings to factory defaults.=run reset_factory ; reset
+-boot_first=if button reset ; then led $bootled_rec on ; run boot_tftp_recovery ; setenv flag_recover 1 ; run boot_default ; fi ; bootmenu
+-boot_default=if env exists flag_recover ; then else run bootcmd ; fi ; run boot_recovery ; setenv replacevol 1 ; run boot_tftp_forever
+-boot_production=led $bootled_pwr on ; run emmc_read_production && bootm $loadaddr#$bootconf#$bootconf_emmc#$bootconf_extra ; led $bootled_pwr off
+-boot_recovery=led $bootled_rec on ; run emmc_read_recovery && bootm $loadaddr#$bootconf#$bootconf_emmc#$bootconf_extra ; led $bootled_rec off
+-boot_emmc=run boot_production ; run boot_recovery
+-boot_tftp_forever=led $bootled_rec on ; while true ; do run boot_tftp_recovery ; sleep 1 ; done
+-boot_tftp_production=tftpboot $loadaddr $bootfile_upg && env exists replacevol && iminfo $loadaddr && run emmc_write_production ; if env exists noboot ; then else bootm $loadaddr#$bootconf#$bootconf_emmc#$bootconf_extra ; fi
+-boot_tftp_recovery=tftpboot $loadaddr $bootfile && env exists replacevol && iminfo $loadaddr && run emmc_write_recovery ; if env exists noboot ; then else bootm $loadaddr#$bootconf#$bootconf_emmc ; fi
++bootfile=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-4e-squashfs-sysupgrade.itb
++bootled_pwr=act
++bootled_rec=err
++boot_production=led $bootled_pwr on ; run emmc_read_production && run r4pro_4e_select_wan && bootm $loadaddr#$bootconf#$bootconf_emmc#$bootconf_extra ; led $bootled_pwr off
++boot_emmc=run boot_production
++boot_tftp_production=tftpboot $loadaddr $bootfile && iminfo $loadaddr && run emmc_write_production ; if env exists noboot ; then else run r4pro_4e_select_wan && bootm $loadaddr#$bootconf#$bootconf_emmc#$bootconf_extra ; fi
+ boot_tftp_write_fip=tftpboot $loadaddr $bootfile_fip && run emmc_write_fip
+ boot_tftp_write_bl2=tftpboot $loadaddr $bootfile_bl2 && run emmc_write_bl2
+-boot_tftp=tftpboot $loadaddr $bootfile && bootm $loadaddr#$bootconf
+-mmc_write_vol=imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc erase 0x$part_addr 0x$image_size && mmc write $loadaddr 0x$part_addr 0x$image_size
++boot_tftp=tftpboot $loadaddr $bootfile && run r4pro_4e_select_wan && bootm $loadaddr#$bootconf
++mmc_write_vol=imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc erase 0x$part_addr 0x$part_size && mmc write $loadaddr 0x$part_addr 0x$image_size
+ mmc_read_vol=mmc read $loadaddr $part_addr 0x100 && imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc read $loadaddr 0x$part_addr 0x$image_size && setexpr filesize $image_size * 0x200
+ part_default=production
+-part_recovery=recovery
+ reset_factory=eraseenv && reset
+ emmc_read_production=part start mmc 0 $part_default part_addr && part size mmc 0 $part_default part_size && run mmc_read_vol
+-emmc_read_recovery=part start mmc 0 $part_recovery part_addr && part size mmc 0 $part_recovery part_size && run mmc_read_vol
+ emmc_write_bl2=mmc partconf 0 1 1 1 && mmc erase 0x0 0x400 && mmc write $fileaddr 0x0 0x400 ; mmc partconf 0 1 1 0
+ emmc_write_fip=mmc erase 0x3400 0x2000 && mmc write $fileaddr 0x3400 0x2000 && mmc erase 0x2000 0x800
+ emmc_write_production=part start mmc 0 $part_default part_addr && part size mmc 0 $part_default part_size && run mmc_write_vol
+-emmc_write_recovery=part start mmc 0 $part_recovery part_addr && part size mmc 0 $part_recovery part_size && run mmc_write_vol
+ _init_env=setenv _init_env ; setenv _create_env ; saveenv ; saveenv
+-_firstboot=setenv _firstboot ; run _switch_to_menu ; run _init_env ; run boot_first
+-_switch_to_menu=setenv _switch_to_menu ; setenv bootdelay 3 ; setenv bootmenu_delay 3 ; setenv bootmenu_0 $bootmenu_0d ; setenv bootmenu_0d ; run _bootmenu_update_title
+-_bootmenu_update_title=setenv _bootmenu_update_title ; setenv bootmenu_title "$bootmenu_title       [33m$ver[0m"
++bootcmd=if button reset ; then run golden_restore ; fi ; run ab_seed ; run ab_setpart ; run boot_emmc ; echo "*** boot failed - rebooting ***" ; reset
++active_slot=a
++altcount=0
++bootlimit=3
++ab_seed=if test "$envset" != 1 ; then setenv envset 1 ; saveenv ; fi
++ab_setpart=if test "$active_slot" = b ; then setenv part_default production_b ; else setenv part_default production ; fi
++ab_verify_rollback=env load && test "$active_slot" = "$ab_expected_slot" && test "$altcount" = "$ab_expected_altcount" && test -z "$cfg_pending" && test "$upgrade_available" = 0 && test "$bootcount" = 0
++altbootcmd=led err on ; if button reset ; then run golden_restore ; fi ; if test "$altcount" -ge 4 ; then echo "*** A/B exhausted - halting ***" ; setenv ab_expected_slot $active_slot ; setenv ab_expected_altcount $altcount ; setenv upgrade_available 0 ; setenv bootcount 0 ; setenv cfg_pending ; if saveenv && run ab_verify_rollback ; then run ab_setpart ; run boot_emmc ; echo "NO BOOTABLE SLOT" ; else echo "*** rollback env verify failed - halting ***" ; fi ; else echo "*** slot $active_slot failed - switching ***" ; if test "$active_slot" = b ; then setenv ab_expected_slot a ; setenv active_slot a ; else setenv ab_expected_slot b ; setenv active_slot b ; fi ; setexpr ab_expected_altcount $altcount + 1 ; setexpr altcount $altcount + 1 ; setenv bootcount 0 ; setenv upgrade_available 0 ; setenv cfg_pending ; if saveenv && run ab_verify_rollback ; then run ab_setpart ; run boot_emmc ; reset ; else echo "*** rollback env verify failed - halting ***" ; fi ; fi
++emmc_write_hdr=mmc erase 0x0 0x40 && mmc write $fileaddr 0x0 0x40
++golden_restore=led act on ; led err on ; echo "*** GOLDEN RESTORE from NAND ***" ; mmc dev 0 && mmc bootbus 0 0 0 0 && ubi part ubi && run gr_bl && run gr_en8811h && run gr_env && run gr_slots && echo "*** restored - rebooting ***" ; reset
++gr_bl=ubi read $loadaddr emmc_install && setenv fileaddr $loadaddr && run emmc_write_bl2 && setexpr fileaddr $loadaddr + 0x100000 && run emmc_write_fip && setexpr fileaddr $loadaddr + 0x500000 && run emmc_write_hdr
++gr_en8811h=true
++emmc_write_en8811h_fw=true
++gr_env=setexpr envaddr $loadaddr + 0x600000 && mmc write $envaddr 0x2000 0x200 && mmc write $envaddr 0x2200 0x200
++gr_slots=ubi read $loadaddr fit && iminfo $loadaddr && setenv part_default production && run emmc_write_production && setenv part_default production_b && run emmc_write_production
++r4pro_4e_select_wan=if test "$r4pro_4e_wan_media" = sfp ; then setenv r4pro_4e_wan_selected sfp ; else setenv r4pro_4e_wan_selected copper ; if test -n "$r4pro_4e_wan_media" && test "$r4pro_4e_wan_media" != copper ; then echo "WARNING: invalid r4pro_4e_wan_media; using copper" ; fi ; fi ; setenv r4pro_4e_wan_overlay mt7988a-bananapi-bpi-r4-pro-4e-wan-$r4pro_4e_wan_selected && setenv bootconf config-mt7988a-bananapi-bpi-r4-pro-4e#$r4pro_4e_wan_overlay && echo "SKU=bpi-r4-pro-4e selector=[$r4pro_4e_wan_media] selected=$r4pro_4e_wan_selected overlay=$r4pro_4e_wan_overlay"
++preboot=run r4pro_4e_select_wan
+\ No newline at end of file

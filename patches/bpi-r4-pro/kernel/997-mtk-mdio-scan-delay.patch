@@ -1,0 +1,23 @@
+net: ethernet: mtk_eth_soc: delay mdio scan for r4-pro 10G PHY bootstrap
+
+The BPI-R4 Pro 8X 10G WAN PHY (Aeonsemi AS21010P, phy28) is reset in u-boot
+(board_late_init, see u-boot z13) and needs a short bootstrap before its c45
+ID is valid. Delay the MDIO bus scan so the PHY is ready when get_phy_c45_ids
+reads it; otherwise the scan misses it and eth1 falls back to a generic c45
+PHY. Bring-up margin of 15s tuned down to 3s. Kept as the scan-time readiness
+guard: its timing dependency is empirical (not simply POR bootstrap), so it
+stays even though u-boot now resets the PHY.
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -880,6 +880,11 @@
+ 	eth->mdc_divider = min_t(unsigned int, DIV_ROUND_UP(MDC_MAX_FREQ, max_clk), 63);
+ 	mtk_mdio_config(eth);
+ 	dev_dbg(eth->dev, "MDC is running on %d Hz\n", MDC_MAX_FREQ / eth->mdc_divider);
++	/* AS21xxx 10G WAN PHY (phy28) is reset in u-boot (board_late_init) and
++	 * needs a short bootstrap before its c45 id is valid. Delay the MDIO
++	 * bus scan so the PHY is ready before get_phy_c45_ids probes it, else
++	 * the scan misses it and eth1 falls back to a generic c45 PHY. */
++	msleep(3000);
+ 	ret = of_mdiobus_register(eth->mii_bus, mii_np);
+ 
+ err_put_node:

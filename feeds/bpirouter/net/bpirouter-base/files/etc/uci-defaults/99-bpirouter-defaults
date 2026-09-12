@@ -1,0 +1,84 @@
+#!/bin/sh
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# BpiRouter factory defaults
+
+# Apply factory defaults ONCE per device (at first provisioning), not on every
+# A/B slot's first boot. A keep-config OTA boots a fresh slot whose squashfs
+# re-ships this script. The marker lives in /etc/bpirouter and is preserved in
+# the cfgstage archive. On a fresh trial overlay, S10boot may temporarily apply
+# these defaults before the every-boot S10bpirouter-ota-restore service restores
+# the complete archive (including the marker), all before network/firewall.
+# Subsequent boots see the restored marker and skip this script. A wipe-config
+# upgrade has no archive or marker, so the defaults remain (correct).
+[ -f /etc/bpirouter/.provisioned ] && exit 0
+
+# ── System ──
+uci set system.@system[0].hostname='BpiRouter'
+uci set system.@system[0].timezone='CST-8'
+uci set system.@system[0].zonename='Asia/Shanghai'
+uci commit system
+
+# ── Network ──
+uci set network.lan.ipaddr='192.168.100.1'
+uci set network.lan.netmask='255.255.255.0'
+uci commit network
+
+# ── WiFi ──
+MAC_SUFFIX=$(cat /sys/class/net/eth0/address 2>/dev/null | awk -F: '{print toupper($5$6)}')
+[ -z "$MAC_SUFFIX" ] && MAC_SUFFIX="0000"
+
+for radio in $(uci show wireless 2>/dev/null | grep '=wifi-device' | cut -d= -f1 | cut -d. -f2); do
+    band=$(uci get wireless.${radio}.band 2>/dev/null)
+    section="wireless.default_${radio}"
+
+    # Do not guess the deployment country. Until the operator selects one,
+    # leaving it unset keeps the kernel on its conservative world domain.
+    uci -q delete wireless.${radio}.country
+    uci set wireless.${radio}.disabled='0'
+    uci set ${section}.disabled='0'
+
+    case "$band" in
+        6g|6ghz)
+			# 6GHz configuration baseline: fixed PSC channel and indoor/LPI AP mode.
+			# The radio remains disabled until the runtime regulatory gate passes.
+			uci set wireless.${radio}.channel='37'
+			# wifi-scripts enum: 0=Indoor AP, 1=Standard Power (requires AFC).
+			uci set wireless.${radio}.reg_power_type='0'
+            # A country string is not proof that this kernel/regdb combination
+            # permits AP initiation there. The product enables 6 GHz only after
+            # the authenticated runtime capability check succeeds.
+            uci set wireless.${radio}.disabled='1'
+            uci set ${section}.disabled='1'
+            # 6GHz strictly requires pure WPA3-SAE; mixed mode is prohibited
+            uci set ${section}.ssid="BpiRouter_6G_${MAC_SUFFIX}"
+            uci set ${section}.encryption='sae'
+            uci set ${section}.key='bpirouter'
+            uci set ${section}.ieee80211w='2'
+            ;;
+        5g|5ghz)
+            uci set ${section}.ssid="BpiRouter_5G_${MAC_SUFFIX}"
+            uci set ${section}.encryption='sae-mixed'
+            uci set ${section}.key='bpirouter'
+            uci set ${section}.ieee80211w='1'
+            ;;
+        2g|2ghz)
+            uci set ${section}.ssid="BpiRouter_2.4G_${MAC_SUFFIX}"
+            uci set ${section}.encryption='sae-mixed'
+            uci set ${section}.key='bpirouter'
+            uci set ${section}.ieee80211w='1'
+            ;;
+    esac
+done
+
+uci commit wireless
+
+# ── Replace Banner ──
+if [ -f /etc/banner.bpirouter ]; then
+    mv /etc/banner.bpirouter /etc/banner
+fi
+
+# Mark this device as provisioned so a future A/B slot's first boot (keep-config
+# OTA) skips re-applying these defaults and the restored config survives.
+mkdir -p /etc/bpirouter && touch /etc/bpirouter/.provisioned
+
+exit 0

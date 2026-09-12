@@ -1,0 +1,51 @@
+r4-pro: disable the internal-switch ports the board does not route.
+
+BPI-R4Pro-V10 exposes seven RJ45 jacks: 4x 2.5G from the MxL86252 (ETH1..ETH4),
+one 1G from the MT7988 internal switch (ETH5), and two RJ45+SFP combos. The DTS
+brought up in 990 enabled every internal-switch port anyway, so the kernel
+registered netdevs for ports with nothing behind them, and network.get_ports
+listed them as unconfigured physical ports -- a field tech would look for jacks
+that do not exist. Found during TEST-ACCEPTANCE §9.3 on r4-pro and resolved
+against BPI-R4Pro-V10-SCH-20250806, sheets CM17/CM18. The upstream MxL driver
+DTS in 996 defines only the four routed firmware ports (1..4), so it needs no
+separate disabled spare-port node.
+
+  lan2  gsw_port1  GBE_P1 appears nowhere in the schematic        -> disabled
+  lan3  gsw_port2  GBE_P2 reaches the combo footprint, series R
+                   are NI (the Aeon AS21xxx path is installed)    -> disabled
+  lan4  gsw_port3  ETH8/CN37 = the GbE FPC expansion connector,
+                   real hardware but not a panel jack            -> kept
+
+Verified on the former four-port development baseline: cabling the 1G jack
+brings up lan1 and the 2.5G jacks bring up mxl_lan1/mxl_lan2. The real combo-LAN
+path is not either disabled internal-switch port: the later 997a stage exposes
+it from upstream MxL port13 as mxl_lan4; see BACKLOG N15.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -91,14 +91,23 @@
+ };
+ 
+ &gsw_port1 {
+-	label = "lan2";
++	/* GBE_P1 is not routed on BPI-R4Pro-V10: the pair appears nowhere in
++	 * the schematic. Leaving the port enabled registers a netdev with no
++	 * connector behind it. */
++	status = "disabled";
+ };
+ 
+ &gsw_port2 {
+-	label = "lan3";
++	/* GBE_P2 reaches the ETH6/ETH7 combo footprint, but its series
++	 * resistors are NI there (the Aeon AS21xxx path is the installed one),
++	 * so this port is depopulated on BPI-R4Pro-V10. */
++	status = "disabled";
+ };
+ 
+ &gsw_port3 {
++	/* GBE_P3 goes to ETH8 (CN37), the GbE FPC expansion connector -- real
++	 * hardware, but not a front-panel jack. Kept enabled and labelled so an
++	 * FPC daughterboard works; see BACKLOG N24 for why it is called out. */
+ 	label = "lan4";
+ };
+ 

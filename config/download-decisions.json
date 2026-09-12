@@ -1,0 +1,53 @@
+{
+  "_comment": [
+    "Objects that `make download` fetched but no package claims through its",
+    "Source: field. They arrive through custom Download rules, which OpenWrt",
+    "registers unconditionally, so the download set is not the same as the set",
+    "the boards build.",
+    "",
+    "Whether such an object belongs in a published source-cache cannot be",
+    "derived: usb-modeswitch-data is needed by a package we select, and the",
+    "Broadcom firmware is needed by nothing we select. Both look identical to a",
+    "script -- fetched, unattributed -- so the difference is written down here",
+    "rather than guessed at publish time.",
+    "",
+    "decision:",
+    "  include  goes into source-cache/. Something we build needs it.",
+    "  exclude  withheld. Nothing we build needs it, and shipping a file we do",
+    "           not need is a redistribution question we have no reason to open.",
+    "",
+    "make-downloads-lock.sh refuses to run while an unattributed object has no",
+    "entry here. A new one appearing is a change in what the build pulls, and",
+    "that should stop a release rather than ride along in it.",
+    "",
+    "patches/common/base-files/002-mac80211-download-broadcom-fw-only-when-selected.patch",
+    "now guards both Broadcom Download rules on their config symbols, so a fresh",
+    "collection no longer fetches them at all: 166 objects instead of 168, verified.",
+    "The two entries below are kept as the record of why. If that patch is ever",
+    "dropped the files come back, and the decision that covers them is already here."
+  ],
+  "objects": [
+    {
+      "file": "broadcom-wl-4.150.10.5.tar.bz2",
+      "decision": "exclude",
+      "source": "package/kernel/mac80211/broadcom.mk — $(eval $(call Download,b43))",
+      "reason": "Broadcom proprietary wireless firmware. No CONFIG_PACKAGE_kmod-b43* is selected on any of the six boards, so nothing we build uses it; the download rule is registered unconditionally and fires regardless of configuration.",
+      "evidence": "grep -cE '^CONFIG_PACKAGE_(kmod-b43|kmod-brcmsmac)' on every board config returns 0"
+    },
+    {
+      "file": "broadcom-wl-5.100.138.tar.bz2",
+      "decision": "exclude",
+      "source": "package/kernel/mac80211/broadcom.mk — $(eval $(call Download,brcmsmac))",
+      "reason": "As above. Broadcom firmware for brcmsmac, unused by every board we ship.",
+      "evidence": "grep -cE '^CONFIG_PACKAGE_(kmod-b43|kmod-brcmsmac)' on every board config returns 0"
+    },
+    {
+      "file": "usb-modeswitch-data-20191128.tar.bz2",
+      "decision": "include",
+      "source": "package/utils/usbmode/Makefile — $(eval $(call Download,data))",
+      "reason": "The device database usbmode installs. CONFIG_PACKAGE_usb-modeswitch=y on the boards, so the package is built and this is its second source.",
+      "licence": "GPL-2.0",
+      "evidence": "package/utils/usbmode/Makefile PKG_LICENSE:=GPL-2.0; CONFIG_PACKAGE_usb-modeswitch=y"
+    }
+  ]
+}

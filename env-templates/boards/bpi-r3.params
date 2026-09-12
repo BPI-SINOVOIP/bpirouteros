@@ -1,0 +1,15 @@
+# bpi-r3 u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.6.3).
+# Family-1 (eMMC SD->NAND->eMMC); shares the mt7986 SoC constants. A/B product env
+# drops NOR + boot_update_conf (R3 product runs eMMC; decided 2026-06-10).
+SOC_ENV=mt7986                                       # source ../soc/mt7986.params
+DTBBASE=mt7986a-bananapi-bpi-r3                       # config-/overlay base (dash form)
+IMGPREFIX=openwrt-mediatek-filogic-bananapi_bpi-r3   # bootfile prefix (underscore form)
+DEFENV_BASE=bananapi_bpi-r3                           # defenvs/<DEFENV_BASE>_<medium>_env
+MEDIA="emmc sdmmc snand"                              # media this board generates
+BOOTLED_PWR=green:status                              # u-boot LED label for power/boot indicator
+BOOTLED_REC=blue:status                               # u-boot LED label for recovery indicator
+BOOTCONF_EXTRA=                                       # no extra DT overlay
+# Provisioning LEDs (R3 has 2 u-boot GPIO LEDs: green:status pio69 + blue:status pio86).
+# Like r4-pro: writing flash = both on; success = both off; fail = green off + blue on (fault).
+LED_WRITING='led $bootled_pwr on ; led $bootled_rec on ; '
+PROV_DONE=' ; if test $? = 0 ; then led $bootled_pwr off ; led $bootled_rec off ; else led $bootled_pwr off ; led $bootled_rec on ; fi'

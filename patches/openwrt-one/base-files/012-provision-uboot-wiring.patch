@@ -1,0 +1,39 @@
+Register the openwrt-one provisioning u-boot variant in uboot-mediatek.
+
+Adds the U-Boot/mt7981_openwrt_one-ram variant (defconfig + ENV_IS_NOWHERE
+provisioning defenv come from the uboot z07 patch) and lists it in UBOOT_TARGETS
+so its fip gets built. The recipe (011) emits it as ram-bl31-uboot.fip and
+make-flashkit ships it as the BROM payload (mtk_uartboot loads it -> auto
+USB->NAND flash, no button). The production snand u-boot is unchanged.
+
+diff --git a/package/boot/uboot-mediatek/Makefile b/package/boot/uboot-mediatek/Makefile
+index 44b338e..060e45a 100644
+--- a/package/boot/uboot-mediatek/Makefile
++++ b/package/boot/uboot-mediatek/Makefile
+@@ -494,6 +494,18 @@ define U-Boot/mt7981_openwrt_one-nor
+   DEPENDS:=+trusted-firmware-a-mt7981-nor-ddr4
+ endef
+ 
++define U-Boot/mt7981_openwrt_one-ram
++  NAME:=OpenWrt One provisioning (RAM/UART)
++  BUILD_SUBTARGET:=filogic
++  BUILD_DEVICES:=openwrt_one
++  UBOOT_CONFIG:=mt7981_openwrt-one-ram
++  UBOOT_IMAGE:=u-boot.fip
++  BL2_BOOTDEV:=spim-nand-ubi
++  BL2_SOC:=mt7981
++  BL2_DDRTYPE:=ddr4
++  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ubi-ddr4
++endef
++
+ define U-Boot/mt7981_rfb-spim-nand
+   NAME:=MT7981 Reference Board
+   BUILD_SUBTARGET:=filogic
+@@ -1153,6 +1165,7 @@ UBOOT_TARGETS := \
+ 	mt7981_nokia_ea0326gmp \
+ 	mt7981_openwrt_one-snand \
+ 	mt7981_openwrt_one-nor \
++	mt7981_openwrt_one-ram \
+ 	mt7981_rfb-spim-nand \
+ 	mt7981_rfb-emmc \
+ 	mt7981_rfb-nor \

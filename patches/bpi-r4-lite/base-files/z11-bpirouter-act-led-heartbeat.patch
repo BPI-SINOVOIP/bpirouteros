@@ -1,0 +1,36 @@
+R4-Lite ACT LED: blink (heartbeat) in Linux instead of solid on.
+
+The board's single blue SYS LED (act_led, pwm0/pin13) was solid: default-state
+="on" plus the diag led-boot/running/upgrade bindings force it solid when the
+system is up. Make it blink like r4-pro's act LED — drop the boot/running/
+upgrade bindings (keep led-failsafe) and give it linux,default-trigger =
+"heartbeat", so a steady blink = system alive. r4-lite has only this one
+system LED (sfp-led is SFP-only), so boot/OTA states no longer get a dedicated
+blink here (OTA status is shown by the UI banner / serial).
+
+--- a/target/linux/mediatek/dts/mt7987a-bananapi-bpi-r4-lite.dts
++++ b/target/linux/mediatek/dts/mt7987a-bananapi-bpi-r4-lite.dts
+@@ -23,10 +23,10 @@
+ 		i2c2 = &imux1_sfp;
+ 		i2c3 = &imux2_MikroBus;
+ 		i2c4 = &imux3;
+-		led-boot = &act_led;
++		/* single system LED: free it from the diag boot/running/upgrade states
++		 * (which force it solid) so it runs the heartbeat trigger while up;
++		 * keep led-failsafe only. Mirrors r4-pro's act LED. */
+ 		led-failsafe = &act_led;
+-		led-running = &act_led;
+-		led-upgrade = &act_led;
+ 		serial0 = &uart0;
+ 	};
+ 
+@@ -73,7 +73,8 @@
+ 			function = LED_FUNCTION_STATUS;
+ 			pwms = <&pwm 0 50000 0>;
+ 			max-brightness = <255>;
+-			default-state = "on";
++			/* blink to show the system is alive (was default-state="on" = solid) */
++			linux,default-trigger = "heartbeat";
+ 		};
+ 	};
+ 

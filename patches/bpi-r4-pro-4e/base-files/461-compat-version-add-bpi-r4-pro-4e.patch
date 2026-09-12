@@ -1,0 +1,10 @@
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/05_compat-version
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/05_compat-version
+@@ -11,6 +11,7 @@
+ 	bananapi,bpi-r4|\
+ 	bananapi,bpi-r4-2g5|\
+ 	bananapi,bpi-r4-poe|\
++	bananapi,bpi-r4-pro-4e|\
+ 	routerich,ax3000|\
+ 	zbtlink,zbt-z8102ax-v2)
+ 		ucidef_set_compat_version "1.1"

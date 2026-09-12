@@ -1,0 +1,44 @@
+mediatek: package the MxL862xx DSA stack as a deferred module
+
+The R4-Pro switch consumes the firmware-backed capabilities of an external
+AS21xxx PHY.  A built-in switch driver probes before the root filesystem and
+therefore before that PHY can load its firmware, forcing a later destructive
+unbind/rebind of an otherwise working four-port switch.
+
+Package the switch and both tag drivers as modules, but deliberately do not
+autoload them.  The R4-Pro boot service prepares the PHY first and then loads
+mxl862xx_dsa once, before netifd starts.
+
+diff --git a/package/kernel/linux/modules/netdevices.mk b/package/kernel/linux/modules/netdevices.mk
+index 9fd55df..75e39a1 100644
+--- a/package/kernel/linux/modules/netdevices.mk
++++ b/package/kernel/linux/modules/netdevices.mk
+@@ -654,6 +654,28 @@ endef
+ 
+ $(eval $(call KernelPackage,dsa))
+ 
++
++define KernelPackage/dsa-mxl862xx
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=MaxLinear MxL862xx managed switch DSA support
++  DEPENDS:=+kmod-dsa +kmod-lib-crc16
++  KCONFIG:= \
++	CONFIG_NET_DSA_MXL862 \
++	CONFIG_NET_DSA_TAG_MXL_862XX \
++	CONFIG_NET_DSA_TAG_MXL_862XX_8021Q
++  FILES:= \
++	$(LINUX_DIR)/drivers/net/dsa/mxl862xx/mxl862xx_dsa.ko \
++	$(LINUX_DIR)/net/dsa/tag_mxl862xx.ko \
++	$(LINUX_DIR)/net/dsa/tag_mxl862xx_8021q.ko
++endef
++
++define KernelPackage/dsa-mxl862xx/description
++  Kernel module support for MaxLinear MxL86252 and MxL86282 switches.
++  It is intentionally loaded by the R4-Pro PHY preparation service.
++endef
++
++$(eval $(call KernelPackage,dsa-mxl862xx))
++
+ 
+ define KernelPackage/dsa-notag
+   SUBMENU:=$(NETWORK_DEVICES_MENU)

@@ -1,0 +1,53 @@
+{
+  "_comment": [
+    "Redistribution rights for non-source binary inputs carried IN THIS",
+    "REPOSITORY. There are none.",
+    "",
+    "This file is the record, not a switch. make-public-tree.sh used to take",
+    "--allow-unlicensed-blobs, which let a caller assert permission that nobody",
+    "had obtained -- and a blob published without rights cannot be unpublished.",
+    "An entry here has to name the evidence, so 'we have permission' is",
+    "something written down and reviewable rather than a flag someone typed.",
+    "",
+    "status:",
+    "  confirmed    written permission to redistribute in our public tree and",
+    "               source bundles. Requires source, granted_by, evidence, date.",
+    "  unconfirmed  no permission established. Excluded from anything published,",
+    "               and every board that needs it is unbuildable from a public",
+    "               tree until this changes.",
+    "",
+    "Redistribution rights for firmware are separate from the GPL: a blob may be",
+    "freely usable and still not freely redistributable, and no source archive",
+    "cures the difference.",
+    "",
+    "See resolved[] for inputs that used to be listed here and no longer are."
+  ],
+  "blobs": [],
+  "resolved": [
+    {
+      "file": "as21x1x_fw.bin",
+      "was": "patches/bpi-r4-pro/firmware/as21x1x_fw.bin (261,400 bytes), linked into vmlinux via CONFIG_EXTRA_FIRMWARE",
+      "now": "an ordinary root filesystem file at /lib/firmware/as21x1x_fw.bin, installed by the aeonsemi-as21xxx-firmware package built from the linux-firmware release pinned in DOWNLOADS.lock.json",
+      "vendor": "AEONSEMI Corporation",
+      "device": "AS21010P 10GBASE-T PHY on bpi-r4-pro (the earlier description said Airoha/MaxLinear and 2.5GbE; both were wrong)",
+      "sha256": "ea5ebd370450da6cafa0dd90997a244d70772c131ae4c8d6287bb652c7abc199",
+      "provenance": "byte-identical to linux-firmware-20251125/aeonsemi/as21x1x_fw.bin; that release records it in WHENCE as 'Licence: Redistributable. See LICENSE.aeonsemi for details.'",
+      "licence_note": [
+        "LICENSE.aeonsemi grants use and redistribution for devices containing",
+        "AEONSEMI silicon, and excludes distribution 'as part of the Linux kernel",
+        "or in any other form which would require these files themselves to be",
+        "covered by the terms of the GNU General Public License'.",
+        "",
+        "CONFIG_EXTRA_FIRMWARE links the file into vmlinux, which is the excluded",
+        "form. It is therefore no longer built in; the firmware is distributed as",
+        "a separate file by the upstream firmware package, carrying the upstream",
+        "licence with it, with its source and hash recorded in the release lock.",
+        "",
+        "The licence does not affirmatively enumerate which forms are permitted --",
+        "it excludes. This entry records what we do and why; the wording used in a",
+        "public release is for legal review."
+      ],
+      "date": "2026-08-05"
+    }
+  ]
+}

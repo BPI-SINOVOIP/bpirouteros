@@ -1,0 +1,20 @@
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+@@ -90,6 +90,9 @@
+ 	bananapi,bpi-r3)
+ 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4 sfp2" "sfp1 wan"
+ 		;;
++	bananapi,bpi-r4-pro-4e)
++		ucidef_set_interfaces_lan_wan "lan1 lan3 mxl_lan0 mxl_lan1 mxl_lan2 mxl_lan3 sfp-lan" wan
++		;;
+ 	bananapi,bpi-r4)
+ 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 sfp-lan" "wan sfp-wan"
+ 		;;
+@@ -236,6 +239,7 @@
+ 	bananapi,bpi-r3|\
+ 	bananapi,bpi-r3-mini|\
+ 	bananapi,bpi-r4|\
++	bananapi,bpi-r4-pro-4e|\
+ 	bananapi,bpi-r4-lite)
+ 		wan_mac=$(macaddr_add $(cat /sys/class/net/eth0/address) 1)
+ 		;;

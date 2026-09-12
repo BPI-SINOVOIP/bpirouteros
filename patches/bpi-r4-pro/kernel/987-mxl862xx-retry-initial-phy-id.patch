@@ -1,0 +1,127 @@
+Subject: [PATCH] net: dsa: mxl862xx: retry transient initial PHY ID reads
+
+On the R4-Pro 8X with switch firmware 1.0.70, the first internal PHY 0
+identity read returned an error after COMMON_CFGGET had reported readiness.
+PHYLIB converted -EIO to absence and skipped that PHY for the entire boot.
+Without a reset or rebind, later read-only C22 and C45 probes returned the
+correct identity; the other three internal PHYs had registered normally.
+
+Retry only C22 PHY ID reads during initial MDIO registration, at most three
+times with 100ms between attempts. This adds at most 200ms of sleep per ID
+register; each command retains its existing transport timeout. Persistent
+failure still reaches PHYLIB so discovery of other ports can continue.
+Runtime reads, writes, non-I/O errors and CRC shutdown remain unchanged.
+Keep CRC failures as -EBADMSG within the internal PHY read path, rather
+than consulting a flag that the shutdown worker may already have cleared.
+Normalize back to -EIO at the PHYLIB boundary and for other API commands.
+Use READ_ONCE/WRITE_ONCE for the phase flag: registration can fail before
+the MDIO bus mutex is initialized, so clearing it must not take that lock.
+
+This is an 8X-local fix, separate from the byte-identical upstream import.
+The retry window and startup behavior still need new-image board testing.
+
+---
+diff --git a/drivers/net/dsa/mxl862xx/mxl862xx.c b/drivers/net/dsa/mxl862xx/mxl862xx.c
+--- a/drivers/net/dsa/mxl862xx/mxl862xx.c
++++ b/drivers/net/dsa/mxl862xx/mxl862xx.c
+@@ -267,7 +267,25 @@
+ 
+ static int mxl862xx_phy_read_mii_bus(struct mii_bus *bus, int addr, int regnum)
+ {
+-	return mxl862xx_phy_read_mmd(bus->priv, addr, 0, regnum);
++	struct mxl862xx_priv *priv = bus->priv;
++	int ret, attempt;
++
++	/* Firmware management readiness can precede internal PHY readiness.
++	 * Retry only initial identity reads, before PHYLIB turns a transient
++	 * -EIO into absence. Never retry writes or hide CRC-triggered shutdown.
++	 */
++	for (attempt = 0; ; attempt++) {
++		ret = mxl862xx_phy_read_mmd(priv, addr, 0, regnum);
++		if (ret != -EIO || !READ_ONCE(priv->phy_initializing) ||
++		    (regnum != MII_PHYSID1 && regnum != MII_PHYSID2) ||
++		    attempt == 2)
++			/* PHYLIB must still treat a failed PHY as absent, not abort
++			 * discovery of all remaining PHYs on an unfamiliar errno.
++			 */
++			return ret == -EBADMSG ? -EIO : ret;
++
++		msleep(100);
++	}
+ }
+ 
+ static int mxl862xx_phy_write_mii_bus(struct mii_bus *bus, int addr,
+@@ -279,7 +297,9 @@
+ static int mxl862xx_phy_read_c45_mii_bus(struct mii_bus *bus, int addr,
+ 					 int devadd, int regnum)
+ {
+-	return mxl862xx_phy_read_mmd(bus->priv, addr, devadd, regnum);
++	int ret = mxl862xx_phy_read_mmd(bus->priv, addr, devadd, regnum);
++
++	return ret == -EBADMSG ? -EIO : ret;
+ }
+ 
+ static int mxl862xx_phy_write_c45_mii_bus(struct mii_bus *bus, int addr,
+@@ -358,7 +378,9 @@
+ 	if (!mdio_np)
+ 		return -ENODEV;
+ 
++	WRITE_ONCE(priv->phy_initializing, true);
+ 	ret = devm_of_mdiobus_register(dev, bus, mdio_np);
++	WRITE_ONCE(priv->phy_initializing, false);
+ 	of_node_put(mdio_np);
+ 
+ 	return ret;
+diff --git a/drivers/net/dsa/mxl862xx/mxl862xx.h b/drivers/net/dsa/mxl862xx/mxl862xx.h
+--- a/drivers/net/dsa/mxl862xx/mxl862xx.h
++++ b/drivers/net/dsa/mxl862xx/mxl862xx.h
+@@ -408,6 +408,8 @@
+ 	int mirror_dest;
+ 	bool block_host;
+ 	bool skip_teardown;
++	/* Initial ID-read retries only; accessed with READ_ONCE/WRITE_ONCE. */
++	bool phy_initializing;
+ 	struct delayed_work stats_work;
+ };
+ 
+diff --git a/drivers/net/dsa/mxl862xx/mxl862xx-host.c b/drivers/net/dsa/mxl862xx/mxl862xx-host.c
+--- a/drivers/net/dsa/mxl862xx/mxl862xx-host.c
++++ b/drivers/net/dsa/mxl862xx/mxl862xx-host.c
+@@ -250,7 +250,7 @@
+ 	if (ret) {
+ 		if (!test_and_set_bit(MXL862XX_FLAG_CRC_ERR, &priv->flags))
+ 			schedule_work(&priv->crc_err_work);
+-		return -EIO;
++		return -EBADMSG;
+ 	}
+ 
+ 	return fw_result;
+@@ -320,6 +320,10 @@
+ 		if (!quiet)
+ 			dev_err(&priv->mdiodev->dev,
+ 				"CMD %04x returned error %d\n", cmd, ret);
++		/* Preserve this call's CRC result even if the worker clears flags. */
++		if (ret == -EBADMSG || ret == MXL862XX_FW_CRC6_ERR ||
++		    ret == MXL862XX_FW_CRC16_ERR)
++			return -EBADMSG;
+ 		return -EIO;
+ 	}
+ 
+@@ -467,7 +471,7 @@
+ 	if (crc16(0xffff, (const u8 *)data, size) != crc) {
+ 		if (!test_and_set_bit(MXL862XX_FLAG_CRC_ERR, &priv->flags))
+ 			schedule_work(&priv->crc_err_work);
+-		ret = -EIO;
++		ret = -EBADMSG;
+ 		goto out;
+ 	}
+ 
+@@ -479,6 +483,9 @@
+ out:
+ 	mutex_unlock(&priv->mdiodev->bus->mdio_lock);
+ 
++	/* Only the internal PHY read path needs the per-call CRC distinction. */
++	if (ret == -EBADMSG && cmd != INT_GPHY_READ)
++		return -EIO;
+ 	return ret;
+ }

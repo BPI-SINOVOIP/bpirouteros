@@ -1,0 +1,44 @@
+diff --git a/package/network/utils/comgt/files/ncm.sh b/package/network/utils/comgt/files/ncm.sh
+index 37420f9..f549015 100644
+--- a/package/network/utils/comgt/files/ncm.sh
++++ b/package/network/utils/comgt/files/ncm.sh
+@@ -25,6 +25,21 @@ proto_ncm_init_config() {
+ 	proto_config_add_defaults
+ }
+ 
++ncm_get_manufacturer() {
++	gcom -d "$1" -s /etc/gcom/getcardinfo.gcom |
++		tr -d '\r' |
++		awk '
++			/^[[:space:]]*$/ || /^AT\+CGMI/ || /^(OK|ERROR)$/ { next }
++			/^\+CGMI:[[:space:]]*/ {
++				sub(/^\+CGMI:[[:space:]]*/, "")
++				if (NF) { print tolower($1); exit }
++				next
++			}
++			/^\+/ || /^(RDY|APP RDY|PB DONE)$/ { next }
++			{ print tolower($1); exit }
++		'
++}
++
+ proto_ncm_setup() {
+ 	local interface="$1"
+ 
+@@ -96,7 +111,7 @@ proto_ncm_setup() {
+ 
+ 	start=$(date +%s)
+ 	while true; do
+-		manufacturer=$(gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | awk -v RS='\r?\n' 'NF && $0 !~ /AT\+CGMI/ { sub(/\+CGMI: /,""); print tolower($1); exit; }')
++		manufacturer=$(ncm_get_manufacturer "$device")
+ 		[ "$manufacturer" = "error" ] && {
+ 			manufacturer=""
+ 		}
+@@ -257,7 +272,7 @@ proto_ncm_teardown() {
+ 	json_get_vars manufacturer
+ 	[ $? -ne 0 -o -z "$manufacturer" ] && {
+ 		# Fallback to direct detect, for proper handle device replug.
+-		manufacturer=$(gcom -d "$device" -s /etc/gcom/getcardinfo.gcom | awk 'NF && $0 !~ /AT\+CGMI/ { sub(/\+CGMI: /,""); print tolower($1); exit; }')
++		manufacturer=$(ncm_get_manufacturer "$device")
+ 		[ $? -ne 0 -o -z "$manufacturer" ] && {
+ 			echo "Failed to get modem information"
+ 			proto_notify_error "$interface" GETINFO_FAILED

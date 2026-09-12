@@ -1,0 +1,60 @@
+A/B: build the UBI factory image with two fit volumes (fit-a + fit-b),
+plus the provisioning u-boot fip artifact.
+
+openwrt-one is NAND-only; A/B lives in UBI (Track B). The stock recipe packs a
+single `fit` volume; this splits it into fit-a and fit-b, both populated with the
+same golden sysupgrade.itb, so first boot has both slots bootable. The kernel DTS
+(z10) binds rootdisk to fit-a/fit-b by volname; u-boot z03 selects the slot.
+
+- factory.ubi / snand-factory.bin: ubinize-image now emits the `fit-a` volume
+  (macro arg) and `fit-b` is added to UBINIZE_PARTS (same sysupgrade.itb, dynamic).
+- snand-factory.bin (bl2 + this UBI) is the USB full-reinstall image the u-boot
+  env's usb_recover writes to raw NAND (CRC32-BE verified); the flashkit ships it.
+- Drop the `recovery` and `calibration` UBI volumes from UBINIZE_PARTS: the A/B
+  defenv (z06) has no boot_recovery/boot_calibration, so these volumes were dead
+  weight in the NAND image (recovery ~18MB every build). The NOR-side recovery is
+  unaffected — nor-factory.bin still ships the initramfs and the stock NOR u-boot
+  boots it. The NAND UBI now carries only what we use: fip, fit-a, fit-b,
+  ubootenv/ubootenv2, rootfs_data.
+- ram-bl31-uboot.fip artifact: the provisioning u-boot variant (uboot z07 + the
+  Makefile wiring in 012) packed into a fip; the flashkit ships it as the BROM
+  payload for hands-off USB->NAND install.
+
+diff --git a/target/linux/mediatek/image/filogic.mk b/target/linux/mediatek/image/filogic.mk
+index 63e9c63..ac81557 100644
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -2463,18 +2463,19 @@ define Device/openwrt_one
+   IMAGE/sysupgrade.itb := append-kernel | fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-with-rootfs | pad-rootfs | append-metadata
+   ARTIFACTS := \
+ 	nor-preloader.bin nor-bl31-uboot.fip \
+-	snand-preloader.bin snand-bl31-uboot.fip \
++	snand-preloader.bin snand-bl31-uboot.fip ram-bl31-uboot.fip \
+ 	factory.ubi snand-factory.bin nor-factory.bin
+   ARTIFACT/nor-preloader.bin		:= mt7981-bl2 nor-ddr4
+   ARTIFACT/nor-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-nor
+   ARTIFACT/snand-preloader.bin		:= mt7981-bl2 spim-nand-ubi-ddr4
+   ARTIFACT/snand-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-snand
+-  ARTIFACT/factory.ubi			:= ubinize-image fit squashfs-sysupgrade.itb
++  ARTIFACT/ram-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-ram
++  ARTIFACT/factory.ubi			:= ubinize-image fit-a squashfs-sysupgrade.itb
+   ARTIFACT/snand-factory.bin		:= mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 256k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 512k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 768k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 1024k | \
+-					   ubinize-image fit squashfs-sysupgrade.itb
++					   ubinize-image fit-a squashfs-sysupgrade.itb
+   ARTIFACT/nor-factory.bin		:= mt7981-bl2 nor-ddr4 | pad-to 256k | \
+ 					   append-openwrt-one-eeprom | pad-to 1024k | \
+ 					   mt7981-bl31-uboot openwrt_one-nor | pad-to 512k | \
+@@ -2483,9 +2484,7 @@ define Device/openwrt_one
+   BLOCKSIZE := 128k
+   PAGESIZE := 2048
+   UBINIZE_PARTS := fip=:$(STAGING_DIR_IMAGE)/mt7981_openwrt_one-snand-u-boot.fip \
+-		   $(if $(IB),recovery=:$(STAGING_DIR_IMAGE)/mediatek-filogic-openwrt_one-initramfs.itb,\
+-			      recovery=:$(KDIR)/tmp/$$(KERNEL_INITRAMFS_IMAGE)) \
+-		   $(if $(wildcard $(TOPDIR)/openwrt-mediatek-filogic-openwrt_one-calibration.itb), calibration=:$(TOPDIR)/openwrt-mediatek-filogic-openwrt_one-calibration.itb)
++		   fit-b=$(BIN_DIR)/openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb
+ endef
+ TARGET_DEVICES += openwrt_one
+ 

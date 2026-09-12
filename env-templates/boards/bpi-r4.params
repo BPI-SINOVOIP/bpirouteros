@@ -1,0 +1,16 @@
+# bpi-r4 u-boot defenv params (FIRMWARE_ROLLBACK.md §10.6).
+# Board-agnostic templates in ../media/*.env.in reference @DTBBASE@/@IMGPREFIX@;
+# gen-defenv.sh substitutes these to produce the per-board defenv. A new board =
+# a new <board>.params here (+ vendored pristine), no template edits.
+SOC_ENV=mt7988                                        # source ../soc/mt7988.params (LOADADDR/BOOTARGS_BASE/NAND geom)
+DTBBASE=mt7988a-bananapi-bpi-r4                       # config-/overlay base (dash form)
+IMGPREFIX=openwrt-mediatek-filogic-bananapi_bpi-r4   # bootfile prefix (underscore form)
+DEFENV_BASE=bananapi_bpi-r4                           # defenvs/<DEFENV_BASE>_<medium>_env
+MEDIA="emmc sdmmc snand"                              # media this board generates
+BOOTLED_PWR=green:status                              # u-boot LED label for power/boot indicator
+BOOTLED_REC=blue:status                               # u-boot LED label for recovery indicator
+BOOTCONF_EXTRA=                                       # no extra DT overlay
+# Provisioning LEDs (R4 has 2 u-boot GPIO LEDs: green:status pio79 + blue:status pio63).
+# Like r4-pro: writing flash = both on; success = both off; fail = green off + blue on (fault).
+LED_WRITING='led $bootled_pwr on ; led $bootled_rec on ; '
+PROV_DONE=' ; if test $? = 0 ; then led $bootled_pwr off ; led $bootled_rec off ; else led $bootled_pwr off ; led $bootled_rec on ; fi'
