@@ -23,7 +23,7 @@ follow installation progress. Keep any files or settings you need somewhere else
 | BPI-R3-Mini | `bpi-r3-mini` | `openwrt-mediatek-filogic-bananapi_bpi-r3-mini-flashkit.tar.gz` |
 | OpenWrt One | `openwrt-one` | `openwrt-mediatek-filogic-openwrt_one-flashkit.tar.gz` |
 
-R4-Pro 4E is experimental. Do not exchange files between 8X and 4E, between
+Do not exchange files between 8X and 4E, between
 different models, or between releases. A `sysupgrade.itb` file is not the first
 installation file. Do not write individual files to storage areas by guessing.
 

@@ -2,9 +2,8 @@ A/B: declare the second eMMC slot partition and rootdisk phandles (mt7987/R4-Lit
 
 Adds a `production_b` GPT partition node and /chosen rootdisk-emmc-a/-b phandles
 (referencing emmc_rootfs, the label r4-lite-emmc.dtso gives block-partition-production)
-so 315+z03 mtk_ft_system_setup can point /chosen/rootdisk at the active slot. ONE hunk
-(not two) — a split hunk left the /chosen additions silently unapplied under quilt
-(R3 lesson, FIRMWARE_ROLLBACK §10.12.1 / commit e3eb540).
+so 315+z03 mtk_ft_system_setup can point /chosen/rootdisk at the active slot.
+Keep the partition and /chosen additions in one hunk so they apply together.
 
 --- a/target/linux/mediatek/dts/mt7987a-bananapi-bpi-r4-lite-emmc.dtso
 +++ b/target/linux/mediatek/dts/mt7987a-bananapi-bpi-r4-lite-emmc.dtso

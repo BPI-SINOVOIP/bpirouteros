@@ -1,9 +1,10 @@
-# BpiRouter v1.5.0-rc1: features and use
+# BpiRouter v1.5: features and use
 
 [Chinese](FEATURES.zh-CN.md) · [Installation guide](INSTALLATION.md)
 
-This guide describes v1.5.0-rc1, a release candidate for users to try before the
-final release. Keep a backup and a way to reinstall before using it on a network
+This guide describes the v1.5 series. Versions with an `rc` suffix are release
+candidates for testing before the final release. Keep a backup and a way to
+reinstall before using it on a network
 you depend on. Available ports, Wi-Fi bands and mobile connections depend on
 your board and installed hardware.
 
@@ -11,10 +12,18 @@ your board and installed hardware.
 
 Images are provided for BPI-R4, BPI-R3, BPI-R4-Lite, BPI-R3-Mini, OpenWrt One,
 BPI-R4-Pro 8X and BPI-R4-Pro 4E. Always use the exact model's download.
-R4-Pro 4E is experimental; do not use an 8X image on it. On 4E, the WAN copper
+R4-Pro 4E requires its own image; do not use an 8X image on it. On 4E, the WAN copper
 and SFP connections are alternatives selected at startup, not two simultaneous
 WAN ports. Copper is the default. They do not switch automatically when a cable
-is inserted. Firmware rollback is not available on 4E in this release.
+is inserted.
+On 8X, each 10G combo port (WAN and LAN) also uses either its copper jack or
+its SFP+ cage, chosen at startup with the U-Boot settings `r4pro_8x_wan_media`
+and `r4pro_8x_lan_media` (`copper` or `sfp`, default `copper`) and applied after
+a reboot. Choosing SFP requires a fresh installation; a board updated only
+over the air keeps copper. The LAN SFP+ cage does not accept 2.5G modules.
+Known issue: if the LAN combo copper port has been connected to a 10G device
+and is then connected to a slower one, restart the router; until then that
+port may receive with errors.
 
 ## Get started
 
@@ -24,7 +33,7 @@ and Wi-Fi passwords. The interface offers English and Chinese, light and dark
 themes, and layouts for computers and phones.
 
 Find the product version in **Home → System** or at the top of **System**.
-For this release it is `BpiRouter v1.5.0-rc1`. The separately listed OpenWrt
+Check that it matches the version you installed. The separately listed OpenWrt
 version is not the BpiRouter product version. If the version is unknown, do not
 assume which release is installed.
 
@@ -46,6 +55,8 @@ In **Network**, choose the Internet connection and supply the details required
 by your provider. Wired connections include automatic addressing, a fixed
 address and PPPoE. IPv6 requires support from the provider and connected devices.
 You can also use a compatible mobile module or a phone with USB tethering enabled.
+On the BPI-R4 Pro (8X/4E), connect the phone or USB dongle to the USB 3.2 port; the board's USB 2.0
+port is not available in this release.
 
 Edit a Wi-Fi network to change its name, password and radio settings. Only the
 bands fitted to your board are available. Channel and 6 GHz availability depend
@@ -53,7 +64,9 @@ on your country setting and client support. Changing Wi-Fi settings can disconne
 wireless clients; use a wired connection when making these changes.
 
 For mobile Internet, this release supports compatible Quectel QMI and NCM
-modules, not MBIM. Network availability and 4G/5G operation depend on the module,
+modules and supported EC200A-family ECM USB dongles, not MBIM. This does not
+mean every USB modem is compatible. Network availability and 4G/5G operation
+depend on the module,
 SIM, antenna, provider and coverage. SIM hot-swapping is not supported. Power off
 the router before changing an internal module's SIM. Unplug an external USB
 dongle before changing its SIM, then reconnect it. Do not repeatedly remove just
@@ -122,6 +135,20 @@ For v1.5, install from the matching installation media rather than upgrading
 an older or another vendor's firmware in place. Follow the
 [installation guide](INSTALLATION.md); an upgrade image is not initial
 installation media.
+
+After a firmware update, allow several minutes for startup and any automatic
+restart to complete. Keep the power connected during this process. If the web
+interface remains unavailable, follow the troubleshooting steps in the
+[installation guide](INSTALLATION.md). Keep a way to reinstall the router;
+rollback is not a substitute for a settings backup.
+
+The standard OpenWrt web interface, LuCI, remains available for users who
+prefer it at `https://192.168.100.1/cgi-bin/luci` (use the new address if you
+changed the router's LAN address). Sign in as `root` with the same
+administrator password. Do not change the same setting in both interfaces.
+LuCI does not include Multi-WAN or WAN bandwidth shaping; manage them only in
+BpiRouter. Changing them elsewhere may cause configuration conflicts or errors,
+and BpiRouter does not guarantee automatic recovery.
 
 For product support, contact [Banana Pi](https://www.banana-pi.org/contact-us/)
 or use its [official forum](https://forum.banana-pi.org/). Provide your exact

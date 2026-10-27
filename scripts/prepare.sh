@@ -163,11 +163,11 @@ fi
 board_init "$BOARD"
 
 # A board whose identity is frozen but whose implementation is not cannot produce
-# this output. Refuse by name so the message points at the missing 22-D work
+# this output. Refuse by name so the message points at the missing build prerequisites
 # instead of surfacing later as an absent config or an empty file contract.
-[ "$BOARD_IMPLEMENTED" = yes ] || fail "board $BOARD is a frozen identity without build admission yet (RELEASE-v1.5-EXECUTION-PLAN 22-D step 6); source inputs alone do not satisfy the build gate"
+[ "$BOARD_IMPLEMENTED" = yes ] || fail "board $BOARD is a frozen identity without build admission yet; source inputs alone do not satisfy the build gate"
 case " $PLANNED_BOARDS " in
-    *" $BOARD "*) [ "$DEVELOPMENT" = 1 ] || fail "board $BOARD has a frozen identity; 22-D step 6 permits explicit --development only" ;;
+    *" $BOARD "*) [ "$DEVELOPMENT" = 1 ] || fail "board $BOARD has a frozen identity; this board requires explicit --development" ;;
 esac
 
 # ── Refuse a board this tree cannot finish ──
@@ -372,11 +372,16 @@ apply_patches "$BUILD_DIR/patches/common/atf"        atf
 apply_patches "$BUILD_DIR/patches/common/openwrt"    openwrt
 apply_patches "$BUILD_DIR/patches/common/base-files" base-files
 
-# Both R4-Pro SKUs use the same pinned generic MxL driver stack. Import only
-# its generic layers, never the 8X target DTS, PHY firmware or reset patches.
+# Both R4-Pro SKUs use the same pinned generic MxL driver stack. Import its
+# generic layers and the local fix to that driver, never the 8X target DTS,
+# PHY firmware or reset patches. The 4E's MxL86252 with firmware 1.0.70 loses
+# PHY 0 to the same initial identity-read failure that 987 retries.
 if [ "$BOARD" = bpi-r4-pro-4e ]; then
     apply_patches "$BUILD_DIR/patches/bpi-r4-pro/kernel" kernel-backport
     apply_patches "$BUILD_DIR/patches/bpi-r4-pro/kernel" kernel-pending
+    mkdir -p "$KERNEL_PATCH_DIR"
+    cp "$BUILD_DIR/patches/bpi-r4-pro/kernel/987-mxl862xx-retry-initial-phy-id.patch" "$KERNEL_PATCH_DIR/"
+    echo "  + 987-mxl862xx-retry-initial-phy-id.patch"
 fi
 
 # ── 3. Apply board-specific patches ──

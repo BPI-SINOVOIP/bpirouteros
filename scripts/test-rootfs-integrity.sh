@@ -19,13 +19,15 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 ROOT="$WORK/root"
+BUNDLE="$WORK/bundle"
+GATE_EXTRA=()
 
 # A minimal rootfs shaped like the board's BusyBox command surface. It starts
 # without `stat` so each test can prove whether a product script correctly
 # forces an explicit provider into the assembled image.
 build_rootfs() {
 	rm -rf "$ROOT"
-	mkdir -p "$ROOT"/{bin,sbin,usr/bin,usr/sbin,etc/init.d,etc/rc.d,etc/uci-defaults,etc/modules.d,usr/libexec,usr/share/bpirouter/acceptance/lib,lib/bpirouter,lib/modules/6.12-test}
+	mkdir -p "$ROOT"/{bin,sbin,usr/bin,usr/sbin,etc/init.d,etc/rc.d,etc/uci-defaults,etc/modules.d,usr/libexec,lib/bpirouter,lib/modules/6.12-test}
 	for applet in sh mktemp mkdir chmod rm sync cat ls sed grep printf; do
 		: >"$ROOT/bin/$applet"; chmod +x "$ROOT/bin/$applet"
 	done
@@ -95,17 +97,21 @@ SH
 	done
 	: >"$ROOT/usr/libexec/bpirouter-mwan3-strict.awk"
 	: >"$ROOT/usr/libexec/bpirouter-sqm-strict.awk"
-	printf '#!/bin/sh\nexit 0\n' >"$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
-	chmod +x "$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
 	printf '#!/bin/sh\nexit 0\n' >"$ROOT/etc/rc.common"
+	# The acceptance tool bundle lives beside the image, never inside it.
+	rm -rf "$BUNDLE"
+	mkdir -p "$BUNDLE/lib"
+	printf '#!/bin/sh\nexit 0\n' >"$BUNDLE/lib/acceptance-common.sh"
+	chmod +x "$BUNDLE/lib/acceptance-common.sh"
+	GATE_EXTRA=()
 }
 
 must_pass() {
-	"$GATE" "$ROOT" >/dev/null 2>&1 || fail "$1"
+	"$GATE" "$ROOT" "${GATE_EXTRA[@]}" >/dev/null 2>&1 || fail "$1"
 }
 must_refuse() {
 	local why=$1; shift
-	if "$GATE" "$ROOT" >"$WORK/out" 2>&1; then
+	if "$GATE" "$ROOT" "${GATE_EXTRA[@]}" >"$WORK/out" 2>&1; then
 		cat "$WORK/out" >&2
 		fail "$why"
 	fi
@@ -113,7 +119,7 @@ must_refuse() {
 
 must_refuse_with_path() {
 	local why=$1 path_prefix=$2
-	if PATH="$path_prefix:$PATH" "$GATE" "$ROOT" >"$WORK/out" 2>&1; then
+	if PATH="$path_prefix:$PATH" "$GATE" "$ROOT" "${GATE_EXTRA[@]}" >"$WORK/out" 2>&1; then
 		cat "$WORK/out" >&2
 		fail "$why"
 	fi
@@ -124,8 +130,21 @@ build_rootfs
 must_pass "a well-formed rootfs was rejected"
 
 build_rootfs
-rm -rf "$ROOT/usr/share/bpirouter/acceptance"
-must_pass "a quick-mode rootfs without the release-only acceptance bundle was rejected"
+GATE_EXTRA=(--acceptance-tools "$BUNDLE")
+must_pass "a well-formed rootfs with a well-formed acceptance bundle was rejected"
+
+build_rootfs
+mkdir -p "$ROOT/usr/share/bpirouter/acceptance/lib"
+printf '#!/bin/sh\nexit 0\n' >"$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
+must_refuse "the gate accepted a rootfs that still carries the acceptance tools"
+grep -Fq "rootfs carries formal acceptance tools" "$WORK/out" ||
+	{ cat "$WORK/out" >&2; fail "the gate rejected packaged acceptance tools for the wrong reason"; }
+
+build_rootfs
+GATE_EXTRA=(--acceptance-tool "$BUNDLE")
+must_refuse "the gate accepted a malformed acceptance bundle option"
+grep -Fq "usage:" "$WORK/out" ||
+	{ cat "$WORK/out" >&2; fail "the gate rejected the malformed option for the wrong reason"; }
 
 # ── The historical defect, verbatim ─────────────────────────────────────────
 # Restore the deleted fence from git history rather than a hand-written
@@ -162,43 +181,44 @@ must_refuse "the gate accepted a product script calling a command the rootfs lac
 : >"$ROOT/usr/bin/stat"; chmod +x "$ROOT/usr/bin/stat"
 must_pass "the gate still rejected after the rootfs provided 'stat'"
 
-# Formal acceptance runners are shipped product code even though their file
-# names do not carry the bpirouter prefix. Keep their directory in the scan so
-# the exact missing-stat defect cannot return unnoticed.
+# Formal acceptance runners run on this rootfs although they are delivered
+# beside it and their names do not carry the bpirouter prefix. A supplied
+# bundle stays in the scan so the exact missing-stat defect cannot return.
 build_rootfs
 printf '#!/bin/sh\nstat -Lc %%d:%%i /usr/bin/bpirouter-apid\n' \
-	>"$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
-chmod +x "$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
+	>"$BUNDLE/lib/acceptance-common.sh"
+chmod +x "$BUNDLE/lib/acceptance-common.sh"
+GATE_EXTRA=(--acceptance-tools "$BUNDLE")
 must_refuse "the gate ignored a missing command used by a formal acceptance runner"
 grep -Fq "acceptance-common.sh invokes 'stat'" "$WORK/out" ||
 	{ cat "$WORK/out" >&2; fail "the gate rejected the acceptance runner for the wrong reason"; }
 
 build_rootfs
-printf '#!/bin/sh\nexit 0\n' >"$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
-chmod +x "$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
-mv "$ROOT/usr/share/bpirouter/acceptance/lib" "$ROOT/usr/share/bpirouter/acceptance/lib.real"
-ln -s lib.real "$ROOT/usr/share/bpirouter/acceptance/lib"
+mv "$BUNDLE/lib" "$BUNDLE/lib.real"
+ln -s lib.real "$BUNDLE/lib"
+GATE_EXTRA=(--acceptance-tools "$BUNDLE")
 must_refuse "the gate accepted a redirected formal acceptance library directory"
-grep -Fq "formal acceptance library directory is absent or redirected" "$WORK/out" ||
+grep -Fq "acceptance tool library directory is absent or redirected" "$WORK/out" ||
 	{ cat "$WORK/out" >&2; fail "the gate rejected the redirected acceptance library for the wrong reason"; }
 
 # A failed traversal or inventory sort is a gate failure, not an empty result.
 # Wrappers delegate every unrelated call so these cases reach the exact branch
 # under test after all earlier rootfs checks have succeeded.
 build_rootfs
+GATE_EXTRA=(--acceptance-tools "$BUNDLE")
 FAIL_FIND_BIN="$WORK/fail-find-bin"
 mkdir -p "$FAIL_FIND_BIN"
 REAL_FIND=$(command -v find)
 cat >"$FAIL_FIND_BIN/find" <<EOF
 #!/bin/sh
 case "\$1" in
-	*/usr/share/bpirouter/acceptance) exit 73 ;;
+	*/bundle) exit 73 ;;
 esac
 exec "$REAL_FIND" "\$@"
 EOF
 chmod +x "$FAIL_FIND_BIN/find"
 must_refuse_with_path "the gate swallowed an acceptance find failure" "$FAIL_FIND_BIN"
-grep -Fq "cannot scan formal acceptance tool directory" "$WORK/out" ||
+grep -Fq "cannot scan the acceptance tool bundle" "$WORK/out" ||
 	{ cat "$WORK/out" >&2; fail "the gate rejected the failed acceptance traversal for the wrong reason"; }
 
 build_rootfs

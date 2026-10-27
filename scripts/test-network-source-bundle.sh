@@ -26,6 +26,9 @@ done
 # Test the current script even before it has been committed in the real repo.
 cp "$SCRIPT_DIR/release-source-bundle.sh" "$TEST_ROOT/bpirouter-build/scripts/"
 cp "$SCRIPT_DIR/lib/public-export-policy.py" "$TEST_ROOT/bpirouter-build/scripts/lib/"
+cp "$SCRIPT_DIR/lib/user-guides.sh" "$TEST_ROOT/bpirouter-build/scripts/lib/"
+cp "$SCRIPT_DIR/lib/public-source-lock.py" "$TEST_ROOT/bpirouter-build/scripts/lib/"
+cp "$SCRIPT_DIR/check-release-lock.sh" "$TEST_ROOT/bpirouter-build/scripts/"
 cp "$SCRIPT_DIR/make-public-tree.sh" "$TEST_ROOT/bpirouter-build/scripts/"
 cp "$SCRIPT_DIR/make-flashkit.sh" "$TEST_ROOT/bpirouter-build/scripts/"
 cp "$SCRIPT_DIR/test-flashkit-metadata.py" "$TEST_ROOT/bpirouter-build/scripts/"
@@ -46,7 +49,7 @@ printf 'Internal records must not be exported\n' > "$TEST_ROOT/bpirouter-ui/docs
 cp "$BUILD_DIR/../bpirouter-ui/LICENSE" "$TEST_ROOT/bpirouter-ui/"
 printf 'Private source must not be exported\n' > "$TEST_ROOT/bpirouter-ui/private.go"
 
-# Freeze a pre-fix lock, then introduce all five corrected files in METADATA_REV.
+# Freeze a pre-fix lock without the guide helper, then add all six files.
 SD_FIX="$TEST_ROOT/sd-fix"
 mkdir "$SD_FIX"
 cp "$TEST_ROOT/bpirouter-build/scripts/build-full.sh" "$SD_FIX/"
@@ -54,6 +57,7 @@ cp "$TEST_ROOT/bpirouter-build/scripts/make-flashkit.sh" "$SD_FIX/"
 mv "$TEST_ROOT/bpirouter-build/scripts/lib/refresh-sd-image-metadata.py" "$SD_FIX/"
 mv "$TEST_ROOT/bpirouter-build/scripts/test-sd-image-metadata.py" "$SD_FIX/"
 mv "$TEST_ROOT/bpirouter-build/scripts/test-flashkit-metadata.py" "$SD_FIX/"
+mv "$TEST_ROOT/bpirouter-build/scripts/lib/user-guides.sh" "$SD_FIX/"
 sed '/# OpenWrt emitted metadata before the factory environment was written\./d; /python3 .*refresh-sd-image-metadata\.py/d' \
     "$SD_FIX/build-full.sh" > "$TEST_ROOT/bpirouter-build/scripts/build-full.sh"
 ! grep -q 'refresh-sd-image-metadata.py' "$TEST_ROOT/bpirouter-build/scripts/build-full.sh" || fail "pre-fix build fixture"
@@ -126,6 +130,8 @@ cmp "$BUNDLE/LICENSES/GPL-2.0.txt" "$OW/COPYING"
 
 # Public repository export includes the locked UI without private history or
 # working-tree additions. Its README remains identical across releases.
+# The current exporter needs its helper, but the frozen commit must not have it.
+cp "$SD_FIX/user-guides.sh" "$TEST_ROOT/bpirouter-build/scripts/lib/"
 printf 'uncommitted private note\n' > "$TEST_ROOT/bpirouter-feeds/net/private-note.txt"
 PUBLIC="$TEST_ROOT/public/bpirouteros"
 bash "$TEST_ROOT/bpirouter-build/scripts/make-public-tree.sh" --release "$RELEASE" \
@@ -273,6 +279,8 @@ echo "PASS: README prepare reaches clone; public build checks the lock before UI
 printf 'Different fixture payload\n' > "$TEST_ROOT/payload/usr/bin/bpirouter-apid"
 "$APK" mkpkg --info name:bpirouter-ui --info version:1.5.0_rc999-r1 \
     --info arch:aarch64_cortex-a53 --files "$TEST_ROOT/payload" --output "$TEST_ROOT/other.apk"
+# This negative bundle test requires the original clean release checkout.
+mv "$TEST_ROOT/bpirouter-build/scripts/lib/user-guides.sh" "$SD_FIX/"
 if bash "$TEST_ROOT/bpirouter-build/scripts/release-source-bundle.sh" \
     "${bundle_args[@]}" --ui-artifact "$TEST_ROOT/other.apk" --output "$TEST_ROOT/rejected" \
     > "$TEST_ROOT/rejected.log" 2>&1; then
@@ -280,6 +288,7 @@ if bash "$TEST_ROOT/bpirouter-build/scripts/release-source-bundle.sh" \
 fi
 grep -Fq "the UI artifact's sha256 is not in the input lock" "$TEST_ROOT/rejected.log"
 [ ! -e "$TEST_ROOT/rejected" ] || fail "rejected export left an output directory"
+cp "$SD_FIX/user-guides.sh" "$TEST_ROOT/bpirouter-build/scripts/lib/"
 echo "PASS: the existing UI artifact identity check remains enforced"
 
 # Exercise the language gate with a committed document, independently of the lock.
@@ -317,6 +326,10 @@ cp "$SD_FIX/make-flashkit.sh" "$SD_FIX/test-flashkit-metadata.py" "$TEST_ROOT/bp
 git -C "$TEST_ROOT/bpirouter-build" add scripts/make-flashkit.sh scripts/test-flashkit-metadata.py
 git -C "$TEST_ROOT/bpirouter-build" -c user.name=Fixture -c user.email=fixture@example.invalid \
     commit -qm 'Flashkit metadata revision fixture'
+FLASHKIT_ONLY_REV=$(git -C "$TEST_ROOT/bpirouter-build" rev-parse HEAD)
+git -C "$TEST_ROOT/bpirouter-build" add scripts/lib/user-guides.sh
+git -C "$TEST_ROOT/bpirouter-build" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    commit -qm 'Flashkit guide dependency fixture'
 METADATA_REV=$(git -C "$TEST_ROOT/bpirouter-build" rev-parse HEAD)
 printf '\n# Uncommitted content must not be exported\n' >> "$TEST_ROOT/bpirouter-build/scripts/lib/refresh-sd-image-metadata.py"
 REVISED="$TEST_ROOT/revised/bpirouteros"
@@ -325,6 +338,7 @@ bash "$TEST_ROOT/bpirouter-build/scripts/make-public-tree.sh" --release "$RELEAS
     > "$TEST_ROOT/revised.log" 2>&1 || { cat "$TEST_ROOT/revised.log"; fail "metadata revision export"; }
 [ ! -e "$REVISED/scripts/revision-note.txt" ] || fail "unrelated revision file exported"
 cmp "$LOCK" "$REVISED/RELEASE-INPUTS.lock.json"
+python3 "$REVISED/scripts/test-flashkit-metadata.py"
 python3 - "$TEST_ROOT/bpirouter-build" "$REVISED" "$METADATA_REV" "$TEST_ROOT/new-head/bpirouteros" <<'PY'
 import hashlib, json, pathlib, subprocess, sys
 repo, root = map(pathlib.Path, sys.argv[1:3])
@@ -335,7 +349,7 @@ assert record['firmware_build_commit'] == json.loads(lock.read_text())['repos'][
 assert record['metadata_revision'] == sys.argv[3]
 assert set(record['files_sha256']) == {'scripts/build-full.sh',
     'scripts/lib/refresh-sd-image-metadata.py', 'scripts/test-sd-image-metadata.py',
-    'scripts/make-flashkit.sh', 'scripts/test-flashkit-metadata.py'}
+    'scripts/make-flashkit.sh', 'scripts/test-flashkit-metadata.py', 'scripts/lib/user-guides.sh'}
 for name, digest in record['files_sha256'].items():
     content = (root / name).read_bytes()
     assert content == subprocess.check_output(['git', '-C', str(repo), 'show', f'{sys.argv[3]}:{name}'])
@@ -344,6 +358,7 @@ baseline = pathlib.Path(sys.argv[4])
 assert not (baseline / 'scripts/lib/refresh-sd-image-metadata.py').exists()
 assert not (baseline / 'scripts/test-sd-image-metadata.py').exists()
 assert not (baseline / 'scripts/test-flashkit-metadata.py').exists()
+assert not (baseline / 'scripts/lib/user-guides.sh').exists()
 assert (baseline / 'scripts/make-flashkit.sh').read_bytes() != (root / 'scripts/make-flashkit.sh').read_bytes()
 assert 'refresh-sd-image-metadata.py' not in (baseline / 'scripts/build-full.sh').read_text()
 allowed = set(record['files_sha256']) | {'SOURCE-DELIVERY.json'}
@@ -352,9 +367,8 @@ after = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.
 assert {name for name in before.keys() | after.keys() if before.get(name) != after.get(name)} <= allowed
 PY
 python3 "$REVISED/scripts/test-sd-image-metadata.py"
-python3 "$REVISED/scripts/test-flashkit-metadata.py"
 MISSING_SD_REV=$(git -C "$TEST_ROOT/bpirouter-build" rev-parse "$SD_ONLY_REV^")
-for revision in HEAD 0000000000000000000000000000000000000000 "$MISSING_SD_REV" "$SD_ONLY_REV"; do
+for revision in HEAD 0000000000000000000000000000000000000000 "$MISSING_SD_REV" "$SD_ONLY_REV" "$FLASHKIT_ONLY_REV"; do
     if bash "$TEST_ROOT/bpirouter-build/scripts/make-public-tree.sh" --release "$RELEASE" \
         --lock "$LOCK" --ui-artifact "$UIAPK" --metadata-revision "$revision" \
         --output "$TEST_ROOT/bad-revision/bpirouteros" > "$TEST_ROOT/bad-revision.log" 2>&1; then
@@ -368,6 +382,40 @@ for revision in HEAD 0000000000000000000000000000000000000000 "$MISSING_SD_REV" 
         grep -Fq 'metadata revision is missing scripts/test-flashkit-metadata.py' \
             "$TEST_ROOT/bad-revision.log" || fail "missing flashkit file was not rejected before export"
     fi
+    if [ "$revision" = "$FLASHKIT_ONLY_REV" ]; then
+        grep -Fq 'metadata revision is missing scripts/lib/user-guides.sh' \
+            "$TEST_ROOT/bad-revision.log" || fail "missing guide helper was not rejected before export"
+    fi
     [ ! -e "$TEST_ROOT/bad-revision/bpirouteros" ] || fail "invalid revision created output"
 done
 echo "PASS: explicit metadata revision preserves the image lock and excludes unrelated changes"
+
+# A public source revision has its own input hashes and preserves firmware provenance.
+printf '\n# Revised public configuration comment\n' >> "$TEST_ROOT/bpirouter-build/config/common.config"
+git -C "$TEST_ROOT/bpirouter-build" add config/common.config
+git -C "$TEST_ROOT/bpirouter-build" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    commit -qm 'Public source revision fixture'
+SOURCE_REV=$(git -C "$TEST_ROOT/bpirouter-build" rev-parse HEAD)
+printf '\n# Uncommitted configuration must not be exported\n' >> "$TEST_ROOT/bpirouter-build/config/common.config"
+PUBLIC="$TEST_ROOT/source-revision/bpirouteros"
+bash "$TEST_ROOT/bpirouter-build/scripts/make-public-tree.sh" --release "$RELEASE" \
+    --lock "$LOCK" --ui-artifact "$UIAPK" --source-revision "$SOURCE_REV" --output "$PUBLIC" \
+    > "$TEST_ROOT/source-revision.log" 2>&1 || { cat "$TEST_ROOT/source-revision.log"; fail "public source revision export"; }
+cmp "$LOCK" "$PUBLIC/FIRMWARE-INPUTS.lock.json"
+git -C "$TEST_ROOT/bpirouter-build" show "$SOURCE_REV:config/common.config" | cmp - "$PUBLIC/config/common.config"
+python3 "$PUBLIC/scripts/lib/public-source-lock.py" --tree "$PUBLIC" --check "$PUBLIC/RELEASE-INPUTS.lock.json"
+printf '\n# Unexpected modification\n' >> "$PUBLIC/config/common.config"
+if BPIR_BUILD_DIR="$PUBLIC" BPIR_WORK_DIR="$TEST_ROOT/bpirouter-build/openwrt" \
+    bash "$PUBLIC/scripts/check-release-lock.sh" --scope tree "$PUBLIC/RELEASE-INPUTS.lock.json" \
+    > "$TEST_ROOT/changed-source.log" 2>&1; then
+    fail "modified public configuration accepted"
+fi
+grep -Fq 'config/common.config' "$TEST_ROOT/changed-source.log" || fail "configuration mismatch was not reported"
+if bash "$TEST_ROOT/bpirouter-build/scripts/make-public-tree.sh" --release "$RELEASE" \
+    --lock "$LOCK" --ui-artifact "$UIAPK" --source-revision "$SOURCE_REV" \
+    --metadata-revision "$METADATA_REV" --output "$TEST_ROOT/mixed-revisions/bpirouteros" \
+    > "$TEST_ROOT/mixed-revisions.log" 2>&1; then
+    fail "mixed source and metadata revisions accepted"
+fi
+[ ! -e "$TEST_ROOT/mixed-revisions/bpirouteros" ] || fail "mixed revisions created output"
+echo "PASS: public source revision preserves firmware inputs and rejects later modifications"

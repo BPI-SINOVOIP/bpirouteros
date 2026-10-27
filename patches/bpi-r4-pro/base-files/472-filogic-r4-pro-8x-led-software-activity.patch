@@ -1,0 +1,110 @@
+filogic: use software activity indication for R4-Pro 8X combo LEDs
+
+AS21010 hardware activity did not follow traffic on the tested 8X.
+Keep hardware link indication, but select software netdev activity by
+using a non-default interval on the two yellow LEDs. Set the interval
+before enabling netdev rules: the kernel rejects interval changes once
+hardware control is active. No userspace polling service is needed.
+
+Reconcile missing and recognizable legacy defaults in the existing LED
+service's boot path, after the OTA restore has replaced /etc/config/system.
+Do not use uci-defaults: it runs before that restore and is then removed.
+
+--- a/package/base-files/files/etc/init.d/led
++++ b/package/base-files/files/etc/init.d/led
+@@ -127,12 +127,20 @@
+ 		"netdev")
+ 			[ -n "$dev" ] && {
+ 				echo $dev > /sys/class/leds/${sysfs}/device_name
++				# Trigger activation can inherit PHY hardware rules.
++				# Clear them before selecting a software interval.
++				if [ "$interval" != 50 ]; then
++					for m in link link_10 link_100 link_1000 link_2500 link_5000 link_10000 half_duplex full_duplex tx rx; do
++						[ -e "/sys/class/leds/${sysfs}/$m" ] && \
++							echo 0 > /sys/class/leds/${sysfs}/$m
++					done
++				fi
++				echo $interval > /sys/class/leds/${sysfs}/interval 2>/dev/null
+ 				for m in $mode; do
+ 					[ -e "/sys/class/leds/${sysfs}/$m" ] && \
+ 						echo 1 > /sys/class/leds/${sysfs}/$m
+ 				done
+-				echo $interval > /sys/class/leds/${sysfs}/interval 2>/dev/null
+ 			}
+ 			;;
+ 
+ 		"timer"|"oneshot")
+@@ -197,6 +205,14 @@
+ }
+ 
++boot() {
++	# S10 OTA restore has finished before S96led reads the configuration.
++	if [ -f /lib/functions/bpirouter-combo-leds.sh ]; then
++		. /lib/functions/bpirouter-combo-leds.sh
++	fi
++	start "$@"
++}
++
+ start() {
+ 	[ "$(uci -q get system.@system[-1].leds_off)" = '1' ] && {
+ 		turnoff
+ 		exit 0
+--- /dev/null
++++ b/target/linux/mediatek/filogic/base-files/lib/functions/bpirouter-combo-leds.sh
+@@ -0,0 +1,56 @@
++# Restore missing board defaults after OTA, without replacing custom LEDs.
++bpir_combo_led() {
++	local id="$1" name="$2" sysfs="$3" dev="$4" mode="$5" interval="$6"
++	local section="system.led_$id" key owner
++	if ! uci -q get "$section" >/dev/null; then
++		# A renamed or anonymous LED section can already own this light.
++		for owner in $(uci -q show system | sed -n 's/^\(system\.[^.]*\)=led$/\1/p'); do
++			if [ "$(uci -q get "$owner.sysfs")" = "$sysfs" ]; then
++				return 0
++			fi
++		done
++		uci set "$section=led" || return 1
++		uci set "$section.name=$name" || return 1
++		uci set "$section.sysfs=$sysfs" || return 1
++		uci set "$section.trigger=netdev" || return 1
++		uci set "$section.dev=$dev" || return 1
++		uci set "$section.mode=$mode" || return 1
++		uci set "$section.interval=$interval" || return 1
++		bpir_led_changed=1
++		return 0
++	fi
++	# Only migrate the old, otherwise unchanged activity defaults. A user
++	# choice identical to those defaults cannot be distinguished from them.
++	[ "$interval" = 100 ] || return 0
++	[ "$(uci -q get "$section")" = led ] || return 0
++	[ "$(uci -q get "$section.name")" = "$name" ] || return 0
++	[ "$(uci -q get "$section.sysfs")" = "$sysfs" ] || return 0
++	[ "$(uci -q get "$section.trigger")" = netdev ] || return 0
++	[ "$(uci -q get "$section.dev")" = "$dev" ] || return 0
++	[ "$(uci -q get "$section.mode")" = "$mode" ] || return 0
++	case "$(uci -q get "$section.interval")" in ''|50) ;; *) return 0 ;; esac
++	case "$(uci -q get "$section.default")" in ''|0) ;; *) return 0 ;; esac
++	# Extra options may express user intent; do not normalize them away.
++	for key in $(uci -q show "$section" | cut -d= -f1); do
++		case "$key" in
++			"$section"|"$section.name"|"$section.sysfs"|"$section.trigger"|"$section.dev"|"$section.mode"|"$section.interval"|"$section.default") ;;
++			*) return 0 ;;
++		esac
++	done
++	uci set "$section.interval=100" || return 1
++	bpir_led_changed=1
++}
++
++bpir_combo_led_defaults() {
++	[ "$(board_name)" = bananapi,bpi-r4-pro-8x ] || return 0
++	# Do not commit another writer's pending configuration.
++	[ -z "$(uci -q changes system)" ] || return 0
++	local bpir_led_changed=0
++	bpir_combo_led eth6_link 'ETH6 Link' mdio-bus:18:green:lan mxl_lan4 link 50 || return 1
++	bpir_combo_led eth6_activity 'ETH6 Activity' mdio-bus:18:yellow:lan mxl_lan4 'tx rx' 100 || return 1
++	bpir_combo_led eth7_link 'ETH7 Link' mdio-bus:1c:green:wan eth1 link 50 || return 1
++	bpir_combo_led eth7_activity 'ETH7 Activity' mdio-bus:1c:yellow:wan eth1 'tx rx' 100 || return 1
++	[ "$bpir_led_changed" = 0 ] || uci commit system
++}
++
++bpir_combo_led_defaults

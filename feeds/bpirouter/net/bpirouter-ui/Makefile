@@ -74,12 +74,6 @@ define Package/bpirouter-ui/install
 	$(INSTALL_BIN) ./files/uci-defaults/99-bpirouter-setup $(1)/etc/uci-defaults/
 	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
 	$(INSTALL_DATA) ./files/keep.d/bpirouter-ui $(1)/lib/upgrade/keep.d/bpirouter-ui
-	$(INSTALL_DIR) $(1)/usr/share/bpirouter/acceptance/lib
-	$(INSTALL_BIN) ./files/acceptance/seg-acceptance.sh $(1)/usr/share/bpirouter/acceptance/
-	$(INSTALL_BIN) ./files/acceptance/tel-acceptance.sh $(1)/usr/share/bpirouter/acceptance/
-	$(INSTALL_BIN) ./files/acceptance/cell-acceptance.sh $(1)/usr/share/bpirouter/acceptance/
-	$(INSTALL_BIN) ./files/acceptance/qos-acceptance.sh $(1)/usr/share/bpirouter/acceptance/
-	$(INSTALL_BIN) ./files/acceptance/lib/acceptance-common.sh $(1)/usr/share/bpirouter/acceptance/lib/
 endef
 
 define Package/bpirouter-ui/postinst

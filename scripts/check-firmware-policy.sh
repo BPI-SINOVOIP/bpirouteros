@@ -75,7 +75,7 @@ FW=as21x1x_fw.bin
 # default now fails instead of guessing.
 case "$BOARD" in
     bpi-r4-pro)    NEEDS_FW=yes ;;   # AS21010P 10G PHYs need as21x1x_fw.bin
-    bpi-r4-pro-4e) NEEDS_FW=no  ;;   # 4E carries no AS21010P (22-D, schematic sheet 21)
+    bpi-r4-pro-4e) NEEDS_FW=no  ;;   # 4E carries no AS21010P (schematic sheet 21)
     bpi-r4|bpi-r4-lite|bpi-r3|bpi-r3-mini|openwrt-one) NEEDS_FW=no ;;
     *) die "no firmware policy registered for board: $BOARD" ;;
 esac

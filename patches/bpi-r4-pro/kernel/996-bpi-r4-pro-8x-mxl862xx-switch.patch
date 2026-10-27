@@ -1,18 +1,12 @@
 arm64: dts: r4-pro: enable mxl862xx 2.5G switch (4x 2.5G) on gmac2
 
-Stage 2B (+ fixes from real-machine bring-up): MxL86252 2.5G DSA switch on
+Connect the MxL86252 2.5G DSA switch on
 gmac2 -> CPU port9 10GBASE-R (mxl862xx-8021q tag); 4x 2.5G = mxl_lan0..3. Own DSA
 tree (dsa,member <1 0>) so it doesn't collide with the internal mt7530. Set
 mdio_bus clock to 12.5 MHz (vendor 8X value) or the switch GPHY mmd reads
 time out. The 10G LAN combo is added on upstream-numbered port13 by the next
 board stage; this is the second XPCS anchor and does not share the CPU port9
 XPCS instance.
-
-Standalone forwarding through one MxL user port failed on the former vendor
-stack. A clean-commit 2026-09-03 R4-Pro development image using the migrated
-upstream stack passed an isolated mxl_lan3 test with 5/5 ICMP replies, clearing
-that historical driver limitation on one board. 2.5-Gbps negotiation and formal
-acceptance remain pending; bridge/VLAN operation is not the standalone evidence.
 
 --- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts

@@ -9,8 +9,7 @@ fan -- it just ran at whatever the header defaults to. network.get_resources
 correspondingly reported the board as fanless, which was accurate but only
 because the software could not see the hardware.
 
-Found during TEST-ACCEPTANCE §9.2 on r4-pro and confirmed against
-BPI-R4Pro-V10-SCH-20250806 sheet CM19.
+The wiring is specified in BPI-R4Pro-V10-SCH-20250806 sheet CM19.
 
 The drive is direct (0R series, no inverting stage), unlike r3/r3-mini whose
 pwm-fans are inverted, so cooling-levels rise with duty. Channel, period and the

@@ -149,7 +149,7 @@ set -e
     exit 1
 }
 grep -Fq 'bpirouter-base source is newer than the packaged .apk' "$TEST_ROOT/base-stale.err"
-grep -Fq 'QMF-15/QMF-16 payload vintage' "$TEST_ROOT/base-stale.err"
+grep -Fq 'current base-package payload' "$TEST_ROOT/base-stale.err"
 
 touch "$BASE_APK"
 BPIR_UI_DIR="$TEST_ROOT/ui" BPIR_FEEDS_DIR="$TEST_ROOT/feeds" \

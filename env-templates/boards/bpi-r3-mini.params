@@ -1,4 +1,4 @@
-# bpi-r3-mini u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.12.1).
+# bpi-r3-mini u-boot defenv params.
 # Archetype 2 (no SD): eMMC is the A/B product medium; SPI-NAND holds the golden
 # (snand-factory) read by the eMMC u-boot during golden_restore. Shares the mt7986
 # SoC constants with bpi-r3. The eMMC A/B env is byte-identical logic to bpi-r3's

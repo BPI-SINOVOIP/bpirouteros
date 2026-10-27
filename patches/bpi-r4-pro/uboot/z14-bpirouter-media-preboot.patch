@@ -1,0 +1,23 @@
+Enable the 8X combo media selector log before autoboot on all three media.
+
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-8x-emmc_defconfig
+@@ -21,3 +21,4 @@
+ CONFIG_FIT=y
+ CONFIG_BOOTDELAY=1
++CONFIG_USE_PREBOOT=y
+ CONFIG_AUTOBOOT_KEYED=y
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-8x-sdmmc_defconfig
+@@ -21,3 +21,4 @@
+ CONFIG_FIT=y
+ CONFIG_BOOTDELAY=1
++CONFIG_USE_PREBOOT=y
+ CONFIG_AUTOBOOT_KEYED=y
+--- a/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig
++++ b/configs/mt7988a_bananapi_bpi-r4-pro-8x-snand_defconfig
+@@ -18,3 +18,4 @@
+ CONFIG_FIT=y
+ CONFIG_BOOTDELAY=1
++CONFIG_USE_PREBOOT=y
+ CONFIG_AUTOBOOT_KEYED=y

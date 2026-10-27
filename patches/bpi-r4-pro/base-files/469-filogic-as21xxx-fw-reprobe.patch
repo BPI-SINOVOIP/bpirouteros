@@ -8,16 +8,18 @@ autoload entry and is loaded exactly once after bounded PHY preparation.  The
 four internal-PHY ports remain the minimum usable topology: missing firmware
 or either optional external PHY may disable a 10G path, but must not suppress
 the independent four-port baseline.
+On a combo booted on its SFP medium (/chosen/bpirouter,{wan,lan}-media), that
+combo's PHY is left untouched and is not counted against readiness.
 
 Manual start/restart remains diagnostic-only.  START=19 keeps the boot-only
 PHY preparation and first switch probe ahead of netifd (START=20).
 
 diff --git a/target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw b/target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw
 new file mode 100755
-index 0000000..46ddf58
+index 0000000..5a68ad4
 --- /dev/null
 +++ b/target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,275 @@
 +#!/bin/sh /etc/rc.common
 +# Attempt AS21xxx PHY preparation once rootfs is mounted, then load the MxL862xx
 +# switch driver exactly once. Runtime service actions are read-only.
@@ -26,6 +28,7 @@ index 0000000..46ddf58
 +PHYS="mdio-bus:1c mdio-bus:18"
 +SYSFS_ROOT="${BPIR_AS21XXX_SYSFS_ROOT:-/sys}"
 +MODEL_FILE="${BPIR_AS21XXX_MODEL_FILE:-/proc/device-tree/model}"
++CHOSEN_DIR="${BPIR_AS21XXX_CHOSEN_DIR:-/proc/device-tree/chosen}"
 +FW="${BPIR_AS21XXX_FW:-/lib/firmware/as21x1x_fw.bin}"
 +MDIO_BUS="$SYSFS_ROOT/bus/mdio_bus"
 +NET_ROOT="$SYSFS_ROOT/class/net"
@@ -33,8 +36,8 @@ index 0000000..46ddf58
 +MXL_MODULE=mxl862xx_dsa
 +# Integer seconds only: the target busybox is built without FEATURE_FLOAT_SLEEP,
 +# so `sleep 0.2` fails with "invalid number" and the loop below would spin
-+# without ever waiting. Measured on hardware 2026-09-04: both phases normally
-+# need zero ticks, because drivers_probe and modprobe are both synchronous --
++# without ever waiting. The synchronous drivers_probe and modprobe paths
++# normally need no additional polling --
 +# the module's own init completes the switch probe before modprobe returns.
 +# The budget is therefore insurance against a future deferred probe, not a
 +# figure the normal path spends. Worst case adds 3 x 10s before netifd starts.
@@ -60,6 +63,32 @@ index 0000000..46ddf58
 +	/sbin/modprobe "$MXL_MODULE"
 +}
 +
++# Each 10G combo uses its AS21010P only on the copper medium. U-Boot records the
++# boot-time choice in /chosen; a DTB without it is the copper board.
++combo_media() {
++	_media=
++	[ -r "$CHOSEN_DIR/bpirouter,$1-media" ] &&
++		_media="$(tr -d '\000' < "$CHOSEN_DIR/bpirouter,$1-media")"
++	[ "$_media" = sfp ] && echo sfp || echo copper
++}
++
++phy_combo() {
++	case "$1" in
++		mdio-bus:1c) echo wan ;;
++		mdio-bus:18) echo lan ;;
++	esac
++}
++
++# The PHYs the selected media use. An SFP combo's PHY is left untouched: its
++# state cannot affect that port, so it is neither prepared, waited for, nor
++# reported as a failure.
++copper_phys() {
++	for _phy in $PHYS; do
++		[ "$(combo_media "$(phy_combo "$_phy")")" = copper ] && printf '%s ' "$_phy"
++	done
++	return 0
++}
++
 +is_as21xxx_driver() {
 +	case "$1" in
 +		# This is the driver's generic firmware loader, not a completed
@@ -80,9 +109,10 @@ index 0000000..46ddf58
 +# The combo port's netdev exists as soon as DSA attaches ANY phy to port13,
 +# including the generic pre-firmware identity. That is not a working port: the
 +# switch is loaded once and never re-probed, so a port13 bound to Generic
-+# Clause 45 PHY stays dead for this boot. Measured 2026-09-04: it never links,
-+# and reporting it "ready" is how a dead management port gets logged as up.
++# Clause 45 PHY cannot provide the firmware-backed copper connection.
++# Do not report that binding as a ready management port.
 +lan_combo_phy_ready() {
++	[ "$(combo_media lan)" = sfp ] && return 0
 +	is_as21xxx_driver "$(bound_driver "$MDIO_BUS/devices/mdio-bus:18")"
 +}
 +
@@ -141,11 +171,12 @@ index 0000000..46ddf58
 +	[ "$(tr -d '\000' < "$MODEL_FILE")" = "Banana Pi BPI-R4 Pro 8X" ] || return 0
 +
 +	result=0
-+	[ -f "$FW" ] || {
-+		say "$FW missing; the 10G ports will not come up"
++	active_phys="$(copper_phys)"
++	[ -f "$FW" ] || [ -z "$active_phys" ] || {
++		say "$FW missing; the copper 10G ports will not come up"
 +		result=1
 +	}
-+	for phy in $PHYS; do
++	for phy in $active_phys; do
 +		device="$MDIO_BUS/devices/$phy"
 +		[ -e "$device" ] || {
 +			say "$phy is missing from the MDIO bus"
@@ -181,13 +212,23 @@ index 0000000..46ddf58
 +
 +	result=0
 +	firmware_ready=1
++	active_phys="$(copper_phys)"
 +	[ -f "$FW" ] || {
-+		say "$FW missing; the 10G ports will not come up"
-+		result=1
 +		firmware_ready=0
++		[ -z "$active_phys" ] || {
++			say "$FW missing; the copper 10G ports will not come up"
++			result=1
++		}
 +	}
 +
 +	for phy in $PHYS; do
++		case " $active_phys " in
++			*" $phy "*) ;;
++			*)
++				say "$phy left as is: the $(phy_combo "$phy") combo uses its SFP cage"
++				continue
++				;;
++		esac
 +		device="$MDIO_BUS/devices/$phy"
 +		[ -e "$device" ] || {
 +			say "$phy is missing from the MDIO bus"

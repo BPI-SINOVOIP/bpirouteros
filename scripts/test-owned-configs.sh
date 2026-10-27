@@ -11,10 +11,8 @@
 #   4. no LuCI app ships as a second writer over the same file,
 #   5. a per-config gate runs during the build.
 #
-# sqm satisfied none of these for an entire release cycle: every board shipped
-# the upstream sqm-scripts example, QoS was down out of the box, and multi-WAN
-# went down with it. This gate is what makes that class of omission a build
-# failure rather than something found on hardware.
+# Reject upstream example configurations that bypass product ownership.
+# SQM and multi-WAN must share the same configuration ownership contract.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -31,8 +29,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # An artifact-mode build has no UI source tree; the registry's own consistency
 # was gated when that artifact was produced. Say so out loud rather than
-# passing silently -- a skipped gate that reads like a passed one is how the
-# sqm omission survived review in the first place.
+# passing silently; unavailable checks are not successful checks.
 if [ ! -d "$UI_DIR/backend" ]; then
 	echo "SKIP: no UI source tree at $UI_DIR (artifact-mode build); whole-file ownership registry not cross-checked"
 	exit 0

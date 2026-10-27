@@ -1,4 +1,4 @@
-# bpi-r4-lite u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.6.3).
+# bpi-r4-lite u-boot defenv params.
 # Family-1 (eMMC SD->NAND->eMMC); shares the mt7987 SoC constants. A/B product env
 # drops NOR + boot_update_conf + bootmenu/recovery (R4-Lite product runs eMMC),
 # only SD->NAND->eMMC + A/B (mirrors the R3 family-1 decision).

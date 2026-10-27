@@ -21,7 +21,7 @@
 | BPI-R3-Mini | `bpi-r3-mini` | `openwrt-mediatek-filogic-bananapi_bpi-r3-mini-flashkit.tar.gz` |
 | OpenWrt One | `openwrt-one` | `openwrt-mediatek-filogic-openwrt_one-flashkit.tar.gz` |
 
-R4-Pro 4E 为实验性支持。8X 和 4E、不同板型、不同版本之间不得混用文件。
+8X 和 4E、不同板型、不同版本之间不得混用文件。
 `sysupgrade.itb` 不是首次安装文件。不要猜测存储位置并写入单独文件。
 
 核对安装文件的 SHA-256 与下载页面提供的值是否一致。

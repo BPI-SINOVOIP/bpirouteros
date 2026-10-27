@@ -1,0 +1,92 @@
+diff --git a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+--- a/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
++++ b/package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
+@@ -37,6 +37,78 @@
+ 	jsonfilter -e "$expression" 2>/dev/null
+ }
+ 
++# A modem that has just enumerated can refuse QMI client allocation for a
++# while after reset or cold boot. Dialling before the control plane is
++# ready prevents data-format negotiation and costs the caller a whole retry
++# backoff. Wait,
++# bounded, until WDA answers before the first QMI command. The longer per-probe
++# timeout makes it less likely that a slow client allocation is abandoned; it
++# does not guarantee that.
++#
++# Some enumerations instead leave WDA client allocation refused outright until
++# a CTL sync releases every client ID. This operation invalidates other
++# clients, so it is restricted to exclusive setup after teardown. If WDA
++# has not answered after QMI_SYNC_AFTER seconds, sync once and keep waiting.
++# Nothing else may hold a client here: setup runs after teardown, and apid does
++# not use QMI.
++QMI_READY_TIMEOUT=60
++QMI_SYNC_AFTER=10
++
++qmi_uptime() {
++	cut -d. -f1 /proc/uptime
++}
++
++# CTL lists the services the modem implements: WDS is 1, WDA is 26 (0x1a). A
++# readable list with WDS but without WDA means the modem has no WDA, so waiting
++# for it would only delay the CTL data-format path. A CTL answer is used only
++# to learn that; it is never taken as readiness. Ask only once a QMI service
++# (DMS) answers: an early CTL request can leave WDA allocation refused.
++# Keep the service-discovery request behind the readiness check; it must not
++# replace the WDA probe.
++qmi_lacks_wda() {
++	local versions
++
++	versions="$(uqmi -s -d "$1" -t 5000 --get-versions 2>/dev/null)" || return 1
++	case "$versions" in
++		*'"service_1":'*) ;;
++		*) return 1 ;;
++	esac
++	case "$versions" in
++		*'"service_26":'*) return 1 ;;
++	esac
++	return 0
++}
++
++qmi_wait_ready() {
++	local device="$1"
++	local start now synced= checked=
++
++	start="$(qmi_uptime)"
++	while :; do
++		uqmi -s -d "$device" -t 5000 --wda-get-data-format > /dev/null 2>&1 && {
++			now="$(qmi_uptime)"
++			echo "QMI services ready after $((now - start)) s"
++			return 0
++		}
++		[ -n "$checked" ] ||
++			! uqmi -s -d "$device" -t 5000 --get-device-operating-mode > /dev/null 2>&1 || {
++			checked=1
++			qmi_lacks_wda "$device" && {
++				echo "Modem lists no QMI WDA service; not waiting for it"
++				return 0
++			}
++		}
++		now="$(qmi_uptime)"
++		[ $((now - start)) -lt "$QMI_READY_TIMEOUT" ] || return 1
++		[ -n "$synced" ] || [ $((now - start)) -lt "$QMI_SYNC_AFTER" ] || {
++			echo "QMI WDA not answering after $((now - start)) s; releasing client IDs"
++			uqmi -s -d "$device" -t 5000 --sync > /dev/null 2>&1
++			synced=1
++		}
++		sleep 1
++	done
++}
++
+ qmi_negotiate_data_format() {
+ 	local device="$1"
+ 	local ctl_dataformat="" dataformat_json="" wda_dataformat=""
+@@ -185,6 +257,9 @@
+ 		/sbin/ip link set dev $ifname mtu $mtu
+ 	}
+ 
++	qmi_wait_ready "$device" ||
++		echo "QMI services not ready after $QMI_READY_TIMEOUT s; continuing"
++
+ 	# The apid lifecycle has already completed its AT readiness and SIM/PIN
+ 	# phase before entering netifd. This executor owns only QMI registration and
+ 	# dial commands; repeating UIM diagnosis here creates a second, racy verdict.

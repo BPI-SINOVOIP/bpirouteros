@@ -1,4 +1,4 @@
-# bpi-r3 u-boot defenv params (FIRMWARE_ROLLBACK §10.6 / §10.6.3).
+# bpi-r3 u-boot defenv params.
 # Family-1 (eMMC SD->NAND->eMMC); shares the mt7986 SoC constants. A/B product env
 # drops NOR + boot_update_conf (R3 product runs eMMC; decided 2026-06-10).
 SOC_ENV=mt7986                                       # source ../soc/mt7986.params

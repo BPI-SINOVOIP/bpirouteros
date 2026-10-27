@@ -1,0 +1,32 @@
+MT7988: honor the DT firmware trigger register resource without a second offset.
+
+The mediatek,2p5gphy-fw binding describes resource 1 as the firmware trigger
+register. The MT7988 DTS supplies 0x0f0f0018, so adding MD32_EN_CFG again
+accesses 0x0f0f0030 instead. Use the mapped resource directly for the initial
+read and both trigger writes. Leave MT7987's base-plus-offset mapping alone.
+
+Access widths, barriers and initialization order are unchanged.
+
+--- a/drivers/net/phy/mediatek/mtk-2p5ge.c
++++ b/drivers/net/phy/mediatek/mtk-2p5ge.c
+@@ -399,7 +399,8 @@
+ 		goto release_fw;
+ 	}
+ 
+-	reg = readw(mcu_csr_base + MD32_EN_CFG);
++	/* The DT resource already points to the firmware trigger register. */
++	reg = readw(mcu_csr_base);
+ 	if (reg & MD32_EN) {
+ 		phy_set_bits(phydev, MII_BMCR, BMCR_RESET);
+ 		usleep_range(10000, 11000);
+@@ -422,8 +423,8 @@
+ 			 *(fw->data + MT7988_2P5GE_PMB_FW_SIZE - 2),
+ 			 *(fw->data + MT7988_2P5GE_PMB_FW_SIZE - 1));
+ 
+-	writew(reg & ~MD32_EN, mcu_csr_base + MD32_EN_CFG);
+-	writew(reg | MD32_EN, mcu_csr_base + MD32_EN_CFG);
++	writew(reg & ~MD32_EN, mcu_csr_base);
++	writew(reg | MD32_EN, mcu_csr_base);
+ 	phy_set_bits(phydev, MII_BMCR, BMCR_RESET);
+ 	/* We need a delay here to stabilize initialization of MCU */
+ 	usleep_range(7000, 8000);

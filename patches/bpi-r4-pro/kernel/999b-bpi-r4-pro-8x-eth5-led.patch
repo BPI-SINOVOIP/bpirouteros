@@ -1,0 +1,38 @@
+Light the 8X ETH5 jack LED.
+
+It is driven by SoC GPIO64, which the DT left in GPIO mode. Mux it to the
+switch-PHY LED function.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -164,6 +164,30 @@
+ 	label = "lan1";
+ };
+ 
++/* CM05/CM18: ETH5 (P0) has one jack LED on GPIO64 (LED_A). The pin defaults to
++ * GPIO, so the LED stayed dark; mux it to "led". The switch PHY driver takes
++ * the polarity from the boot strap the pin shares. The 8X's ETH6/ETH7 LEDs come
++ * from the AS21010 PHYs and are not part of this.
++ */
++&gsw_phy0 {
++	pinctrl-names = "gbe-led";
++	pinctrl-0 = <&gbe0_led0_pins>;
++};
++
++&gsw_phy0_led0 {
++	status = "okay";
++	color = <LED_COLOR_ID_YELLOW>;
++};
++
++&pio {
++	gbe0_led0_pins: gbe0-led0-pins {
++		mux {
++			function = "led";
++			groups = "gbe0_led0";
++		};
++	};
++};
++
+ &gsw_port1 {
+ 	/* GBE_P1 is not routed on BPI-R4Pro-V10: the pair appears nowhere in
+ 	 * the schematic. Leaving the port enabled registers a netdev with no

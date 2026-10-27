@@ -3,8 +3,8 @@ Add the BPI-R4 Pro 4E U-Boot identity, three media and pristine environments.
 Derived from the existing R4-Pro board support without changing the 8X.
 CM01 supplies two x16 16Gb devices (4GB); TF-A comb supplies detected RAM
 size at boot, so retain the standard bootstrap memory window in the DTS.
-Use only the internal MT7988 switch at this stage. Linux MxL and WAN combo
-support are separate 22-D steps. There are no AS21 PHYs or reset hooks.
+U-Boot uses the internal MT7988 switch. Linux MxL and WAN combo support
+is configured separately. There are no AS21 PHYs or reset hooks.
 
 --- /dev/null
 +++ b/configs/mt7988a_bananapi_bpi-r4-pro-4e-emmc_defconfig

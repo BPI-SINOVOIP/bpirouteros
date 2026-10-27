@@ -6,8 +6,7 @@ returns a POSITIVE errno (ENODEV=19) when the "en8811h-fw" UBI volume is
 absent, so en8811h_load_firmware()'s `if (ret < 0)` check misses it: it
 falls through and feeds the uninitialized `buffer` to air_write_buf(),
 causing a Synchronous Abort + CPU reset during `Net:` init — before u-boot
-reaches the prompt. (Seen real-machine on bpi-r3-mini RAM-booted against an
-unprovisioned NAND that has no en8811h-fw volume.)
+reaches the prompt. An unprovisioned NAND can lack the en8811h-fw volume.
 
 Init buffer = NULL and treat any non-zero ret as failure, so a missing/
 unreadable firmware degrades to a clean "Load firmware fail." and u-boot

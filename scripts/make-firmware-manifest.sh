@@ -346,7 +346,7 @@ if partial != "1":
         if board not in required:
             sys.exit("formal release board %s has no release file contract yet\n"
                      "  its identity is frozen but its implementation is not "
-                     "(RELEASE-v1.5-EXECUTION-PLAN 22-D steps 2-5)" % board)
+                     "(board configuration and provisioning inputs required)" % board)
         artifacts = d.get("boards", {}).get(board, {}).get("artifacts", [])
         present_files = {item.get("file") for item in artifacts if isinstance(item, dict)}
         absent_files = sorted(required[board] - present_files)

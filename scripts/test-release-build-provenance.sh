@@ -49,6 +49,7 @@ cp -a "$SCRIPT_DIR/../../bpirouter-ui/docs/user" "$UI/docs/user"
 # full anti-mutation suites and cannot run against that synthetic package set;
 # keep the wiring call sites, but replace only the copied fixture implementations.
 for gate in test-mwan3-canonical.sh test-mwan3-route-delete-order.sh \
+			test-mwan3-dynamic-child.sh \
 			test-sqm-canonical.sh test-sqm-lifecycle-owner.sh test-owned-configs.sh \
 			test-offload-disabled.sh \
 			test-rootfs-integrity.sh \
@@ -117,7 +118,16 @@ art=$("$project/deploy/artifact-hash.sh" art "$feed")
 printf 'src %s\nart %s\ninventory %s\n' "$src" "$art" "$inventory" >"$feed/.manifest"
 SH
 chmod +x "$UI/deploy/artifact-hash.sh" "$UI/deploy/build.sh"
-git -C "$UI" add deploy docs
+# Formal acceptance tools are identified through the real UI helper; only the
+# five tool files are fixtures.
+mkdir -p "$UI/scripts/lib"
+cp "$SCRIPT_DIR/../../bpirouter-ui/scripts/acceptance-bundle.sh" "$UI/scripts/acceptance-bundle.sh"
+for runner in cell qos seg tel; do
+    printf '#!/bin/sh\n# %s acceptance fixture\n' "$runner" >"$UI/scripts/$runner-acceptance.sh"
+done
+printf '#!/bin/sh\n# common acceptance fixture\n' >"$UI/scripts/lib/acceptance-common.sh"
+chmod +x "$UI/scripts/"*.sh "$UI/scripts/lib/acceptance-common.sh"
+git -C "$UI" add deploy docs scripts
 git -C "$UI" commit --amend -qm initial
 
 mkdir -p "$FEEDS/net/bpirouter-ui"
@@ -544,6 +554,9 @@ env SKIP_INITRAMFS=1 "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --job
     --lock "$LOCK" --release v1.4.9-rc999 --board openwrt-one \
     --profile openwrt_one --target mediatek/filogic --base "$BASE" \
     --source-dir "$TARGET_DIR" --sidecar "$SIDECAR" >/dev/null
+EXPECTED_BUNDLE=$("$ALT_UI/scripts/acceptance-bundle.sh" --sha "$ALT_UI/scripts")
+[ "$(jq -r '.ui.acceptance_bundle_sha256' "$SIDECAR")" = "$EXPECTED_BUNDLE" ] \
+    || fail "source-mode build provenance does not record the acceptance tool bundle identity"
 python3 - "$SIDECAR" "$BASE" <<'PY' || fail "stale pre-build artifacts entered the sidecar"
 import json, sys
 d = json.load(open(sys.argv[1]))

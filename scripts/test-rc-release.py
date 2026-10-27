@@ -28,6 +28,11 @@ def boards(release):
 
 class RCReleaseTest(unittest.TestCase):
     def test_seven_sku_lock_collection_manifest_and_public_tree(self):
+        for release in ('v1.5.0-rc999', 'v1.5.0'):
+            with self.subTest(release=release):
+                self.check_seven_sku_pipeline(release)
+
+    def check_seven_sku_pipeline(self, release):
         # Entirely synthetic, isolated pipeline: real lock/collector/manifest
         # code, but placeholder firmware and a fixture-only image-policy stub.
         # Passing proves SKU-set plumbing, not firmware or source buildability.
@@ -86,7 +91,6 @@ class RCReleaseTest(unittest.TestCase):
             init(build)
             scripts = build / 'scripts'
             sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
-            release = 'v1.5.0-rc999'
             firmware = root / 'firmware/aeonsemi/as21x1x_fw.bin'
             firmware.parent.mkdir(parents=True)
             firmware.write_bytes(b'synthetic firmware reference')
@@ -178,7 +182,7 @@ class RCReleaseTest(unittest.TestCase):
             public_apk.write_bytes(b'Synthetic export payload, not an installable APK')
             public_lock = root / 'public.lock.json'
             public_data = json.loads(lock.read_text())
-            public_data['ui_artifacts'] = [{'name': 'bpirouter-ui', 'version': '1.5.0_rc999-r1',
+            public_data['ui_artifacts'] = [{'name': 'bpirouter-ui', 'version': contract.expected_versions(release)[1],
                                           'arch': 'aarch64_cortex-a53', 'sha256': sha(public_apk)}]
             public_lock.write_text(json.dumps(public_data))
             run(scripts / 'make-public-tree.sh', '--release', release, '--lock', public_lock,
@@ -202,7 +206,8 @@ class RCReleaseTest(unittest.TestCase):
             feed_gates = ('test-mwan3-canonical.sh', 'test-sqm-canonical.sh',
                           'test-offload-disabled.sh', 'test-owned-configs.sh',
                           'test-factory-reset-rootfs.sh', 'test-rootfs-integrity.sh')
-            other_gates = ('test-mwan3-route-delete-order.sh', 'test-cellular-package-scope.sh',
+            other_gates = ('test-mwan3-route-delete-order.sh', 'test-mwan3-dynamic-child.sh',
+                           'test-cellular-package-scope.sh',
                            'test-cellular-netifd-lifecycle.sh', 'test-netifd-dynamic-ip6assign.sh',
                            'test-netifd-proto-busy.sh', 'test-kernel-patch-routing.sh',
                            'test-as21xxx-reprobe.sh')
@@ -239,14 +244,17 @@ class RCReleaseTest(unittest.TestCase):
             self.assertEqual(public_marker.read_text(), marker_text)
 
             # A recorded lock still has to describe this tree. Neither dropping
-            # the lock nor using the stable/older RC board set may admit 4E.
+            # the lock nor using an incomplete/older board set may admit 4E.
             original_lock = json.loads(public_lock.read_text())
             for release_id in ('v1.5.0', 'v1.4.9-rc1'):
                 public_lock.write_text(json.dumps(dict(original_lock, release=release_id,
                                                         boards=sorted(STABLE), ui_artifacts=[])))
                 result = subprocess.run(command, env=env, capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn('requires a development-bound prepare', result.stderr)
+                if release_id == 'v1.5.0':
+                    self.assertIn('input lock must name exactly', result.stdout + result.stderr)
+                else:
+                    self.assertIn('requires a development-bound prepare', result.stderr)
             public_lock.write_text(json.dumps(original_lock))
             public_marker.write_text(marker_text.replace(f'input_lock_path={public_lock}\n', ''))
             result = subprocess.run(command, env=env, capture_output=True, text=True)
@@ -259,16 +267,17 @@ class RCReleaseTest(unittest.TestCase):
             self.assertIn('config changed since the lock', result.stderr)
             self.assertEqual(calls.read_text().splitlines(), list(feed_gates))
 
-    def test_rc_selects_exactly_seven_skus_without_changing_stable_or_older_rc(self):
+    def test_v15_selects_exactly_seven_skus_without_changing_older_releases(self):
         self.assertEqual(set(boards('v1.5.0-rc1')), RC)
         self.assertEqual(set(boards('v1.5.0-rc12')), RC)
-        for release in ('', 'v1.5.0', 'v1.4.9-rc1', 'v1.5.0-rc', 'v1.5.0-rc0'):
+        self.assertEqual(set(boards('v1.5.0')), RC)
+        for release in ('', 'v1.4.9', 'v1.4.9-rc1', 'v1.5.0-rc', 'v1.5.0-rc0'):
             self.assertEqual(set(boards(release)), STABLE)
 
     def test_rc_does_not_latch_admission(self):
         result = subprocess.check_output(['bash', '-c',
             'source "$1"; bpir_select_release_boards v1.5.0-rc1; '
-            'bpir_select_release_boards v1.5.0; echo "$VALID_BOARDS"',
+            'bpir_select_release_boards v1.4.9; echo "$VALID_BOARDS"',
             'boards', str(SCRIPTS / 'boards.sh')], text=True)
         self.assertEqual(set(result.split()), STABLE)
 
@@ -285,13 +294,13 @@ class RCReleaseTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             contract.validate_input(data, expected)
 
-    def test_4e_keeps_its_own_artifacts_and_ab_execution_disabled(self):
+    def test_4e_keeps_its_own_artifacts_with_ab_execution_enabled(self):
         result = subprocess.check_output(['bash', '-c',
             'source "$1"; bpir_select_release_boards v1.5.0-rc1; '
             'board_init bpi-r4-pro-4e; printf "%s\\n" "$PROFILE" "$AB_ENABLED" '
             '"$BOARD_IMPLEMENTED" "$RELEASE_REQUIRED_FILES"',
             'boards', str(SCRIPTS / 'boards.sh')], text=True).splitlines()
-        self.assertEqual(result[:3], ['bananapi_bpi-r4-pro-4e', 'no', 'yes'])
+        self.assertEqual(result[:3], ['bananapi_bpi-r4-pro-4e', 'yes', 'yes'])
         artifacts = [line for line in result[3:] if line]
         self.assertEqual(len(artifacts), 9)
         self.assertTrue(all('bpi-r4-pro-4e-' in name or name.endswith('bpi-r4-pro-4e.manifest')

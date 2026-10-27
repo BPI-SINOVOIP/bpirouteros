@@ -5,16 +5,6 @@ image being packed, so each volume came out exactly as large as the golden image
 and no larger. A device provisioned that way can never accept a bigger image:
 the A/B OTA writes with ubiupdatevol, which refuses to overflow the volume.
 
-Found on real hardware (2026-07-30, openwrt-one, TEST-ACCEPTANCE §9): the
-telemetry build grew the image by ~218 KB and the OTA stopped working —
-
-  ubiupdatevol: error!: ".../bpirouter-firmware-4096799634.itb" (size 28442890)
-                will not fit volume "/dev/ubi0_4" (size 28315648)
-
-— while system.flash_firmware had already answered success, so the box silently
-stayed on the old slot. 27.0 MiB volumes against a 27.1 MiB image is a 0.45%
-margin, i.e. none at all.
-
 Build/ubinize-image now takes an optional third word, the volume size in MiB,
 and passes it through to the --part syntax the script already understands
 (name=image=sizeMiB). Targets that pass two words are unaffected.

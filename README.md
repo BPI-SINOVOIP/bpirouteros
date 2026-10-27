@@ -67,6 +67,16 @@ This README is not tied to a specific release. The version, upstream commits,
 board set and UI hashes are recorded in `RELEASE-INPUTS.lock.json` for this
 checkout. Do not mix locks, patches or UI APKs from different revisions.
 
+When `source_delivery` is present in that lock, it describes revised public
+sources, not the exact inputs originally used to produce the downloadable
+firmware. `FIRMWARE-INPUTS.lock.json` preserves the original firmware lock,
+bound by its SHA-256. The public lock records current patch/config hashes;
+the upstream revisions, board set and UI package remain pinned. Its `repos`
+field retains the original firmware repository revisions. The delivery's
+`build_source_revision` identifies the revised build-source commit when known;
+null means that no committed source revision is claimed. Public Git history
+identifies the checkout you are building. The build still verifies input hashes.
+
 If present, `SOURCE-DELIVERY.json` records reviewed SD and flashkit post-build
 metadata corrections to the supplied scripts. They fix final checksum/size
 records without changing the locked firmware configuration or UI package.
@@ -81,7 +91,7 @@ jq -r '.boards_unbuildable_publicly[]?' RELEASE-INPUTS.lock.json
 
 Boards listed by the third command lack publicly distributable inputs and cannot
 be built using these instructions. Build availability does not establish hardware
-acceptance; consult the release notes for experimental boards and limitations.
+acceptance; consult the release notes for per-SKU limitations.
 
 | Hardware | BOARD |
 |---|---|

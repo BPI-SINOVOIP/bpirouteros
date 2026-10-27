@@ -1,6 +1,5 @@
 #!/bin/bash
-# Guards the R4-Pro two-SKU identity contract frozen by RELEASE-v1.5-EXECUTION-PLAN
-# 22-D step 1. The failure this exists to prevent is not a crash: it is an R4-Pro
+# Guards the R4-Pro two-SKU identity contract. Reject an R4-Pro
 # deliverable whose name does not say which board it is for, or a seventh SKU that
 # joins the release set before it can be built. Both look like success.
 set -eo pipefail
@@ -161,7 +160,7 @@ ok "an unregistered board cannot obtain an empty release-file contract"
 
 # ── 6. The refusal reaches the operator, at the real entry points ──
 # A guard that exits non-zero is not enough: the point is that the reason names
-# the missing 22-D work. An undefined helper would still block the build while
+# the missing build prerequisites. An undefined helper would still block the build while
 # printing "die: command not found", and a status-only assertion would call that
 # a pass. So each entry point is run for real and its text is checked.
 #
@@ -190,8 +189,8 @@ entry_refusal() {
         && fail "$entry refused via an undefined helper: $(printf '%s' "$out" | tail -1)"
     printf '%s' "$out" | grep -Fq 'frozen identity' \
         || fail "$entry did not say the identity is frozen but unimplemented: $(printf '%s' "$out" | tail -1)"
-    printf '%s' "$out" | grep -Fq '22-D' \
-        || fail "$entry refusal does not point at the outstanding 22-D work"
+    printf '%s' "$out" | grep -Fq 'development' \
+        || fail "$entry refusal does not point at the required development mode"
 }
 
 entry_refusal prepare.sh --board bpi-r4-pro-4e --without-proprietary-ui

@@ -13,16 +13,17 @@ serial boot may be to *rewrite* the golden), and validates BEFORE erasing/writin
 
   emmc_install: `ubi read fit && iminfo` validates the slot image BEFORE any eMMC
     write; the NAND source itself was CRC-verified when it was flashed. Reuses
-    golden_restore's gr_bl/gr_slots (bl2/fip/gpt + both slots) + mmc rescan; solid
+    golden_restore's gr_bl/gr_slots (bl2/fip/gpt + both slots) + mmc rescan, then
+    erases cfgstage by GPT name so no earlier keep-settings archive survives; solid
     green LED on success for no-serial operators (this board's blue LEDs sit on
     strap pins and are not drivable from u-boot, so we use the one usable LED).
 
 USB plugged = (re)flash NAND incl. its own BL2+u-boot (full snand-factory.bin);
-USB removed = provision eMMC. Hardware-validated 2026-06-13 (CRC verify-before-
-write, read-back, eMMC both slots).
+USB removed = provision eMMC, verifying CRC before writes and reading back
+both eMMC slots.
 --- a/defenvs/bananapi_bpi-r3-mini_snand_env
 +++ b/defenvs/bananapi_bpi-r3-mini_snand_env
-@@ -1,61 +1,20 @@
+@@ -1,61 +1,21 @@
 -ipaddr=192.168.1.1
 -serverip=192.168.1.254
  loadaddr=0x46000000
@@ -91,9 +92,10 @@ write, read-back, eMMC both slots).
 +verify_src=crc32 $loadaddr $imgsz 0x4f000000 && fatload usb 0 0x4f000004 snand-factory.crc && cmp.b 0x4f000000 0x4f000004 4
 +verify_nand=mtd read spi-nand0 0x60000000 0x0 $imgsz && cmp.b $loadaddr 0x60000000 $imgsz
 +flash_nand=led $bootled_pwr off ; if run verify_src && mtd erase spi-nand0 && mtd write spi-nand0 $loadaddr 0x0 $imgsz && run verify_nand ; then led $bootled_pwr on ; echo "** NAND OK: remove USB, strap NAND, power-cycle **" ; else led $bootled_pwr off ; echo "** NAND VERIFY/WRITE FAILED - nothing or partial; re-flash **" ; fi
-+emmc_install=led $bootled_pwr off ; if mmc dev 0 && mmc bootbus 0 0 0 0 && ubi part ubi && ubi read $loadaddr fit && iminfo $loadaddr && run gr_bl && run gr_en8811h && mmc rescan && run gr_slots ; then led $bootled_pwr on ; echo "** eMMC OK: set strap to eMMC and power-cycle **" ; else led $bootled_pwr off ; echo "** eMMC INSTALL FAILED **" ; fi
++emmc_install=led $bootled_pwr off ; if mmc dev 0 && mmc bootbus 0 0 0 0 && ubi part ubi && ubi read $loadaddr fit && iminfo $loadaddr && run gr_bl && run gr_en8811h && mmc rescan && run gr_slots && run emmc_erase_cfgstage ; then led $bootled_pwr on ; echo "** eMMC OK: set strap to eMMC and power-cycle **" ; else led $bootled_pwr off ; echo "** eMMC INSTALL FAILED **" ; fi
 +gr_bl=ubi read $loadaddr emmc_install && setenv fileaddr $loadaddr && run emmc_write_bl2 && setexpr fileaddr $loadaddr + 0x100000 && run emmc_write_fip && setexpr fileaddr $loadaddr + 0x500000 && run emmc_write_hdr
 +gr_slots=ubi read $loadaddr fit && iminfo $loadaddr && setenv part_default production && run emmc_write_production && setenv part_default production_b && run emmc_write_production
++emmc_erase_cfgstage=if part start mmc 0 cfgstage part_addr && part size mmc 0 cfgstage part_size && mmc erase 0x$part_addr 0x$part_size ; then else echo "*** cfgstage not erased ***" ; fi
 +emmc_write_bl2=mmc partconf 0 1 1 1 && mmc erase 0x0 0x400 && mmc write $fileaddr 0x0 0x400 ; mmc partconf 0 1 1 0
 +emmc_write_fip=mmc erase 0x3400 0x2000 && mmc write $fileaddr 0x3400 0x2000 && mmc erase 0x2000 0x800
 +emmc_write_hdr=mmc erase 0x0 0x40 && mmc write $fileaddr 0x0 0x40

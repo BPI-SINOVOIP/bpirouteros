@@ -1,15 +1,8 @@
 #!/bin/bash
 # test-public-tree.sh — build the public tree and actually use it.
 #
-# The tree it checks is the one a customer clones. The previous version of
-# make-public-tree.sh produced a tree that could not get past the second command
-# in its own README -- prepare.sh copies feeds.conf unconditionally and there
-# was none -- and that went unnoticed because the only verification was a
-# checklist of files, written by the same person who wrote the copy loop. A list
-# of what you remembered to include cannot reveal what you forgot.
-#
-# So this runs the README's commands against a throwaway copy. It never touches
-# the working tree's openwrt/ checkout.
+# Run the README commands against a temporary public tree, including the
+# required feeds.conf input. Do not touch the working OpenWrt checkout.
 #
 # Usage: test-public-tree.sh [--board <board>] [--keep]
 #   --board  which board to prepare (default bpi-r4)

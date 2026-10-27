@@ -1,10 +1,10 @@
-# mt7987 (R4-Lite) per-SoC env constants (FIRMWARE_ROLLBACK §10.6.3).
+# mt7987 (R4-Lite) per-SoC env constants.
 # Sourced by boards/<board>.params via SOC_ENV. Values with $loadaddr / && MUST be
 # single-quoted so bash keeps them literal (they are u-boot env text, not shell).
 # mt7987 NAND uses 0x80000 erase blocks (like mt7988) but a 0x1f000 ubootenv vol
 # (like mt7986); its NAND bl2 MTD partition is named `bl2-nand` (not `bl2`).
 # BOOTARGS_BASE follows the mt7986 style (no console=/pci=; serial via DT
-# stdout-path) pending r4-lite real-machine confirmation.
+# stdout-path).
 LOADADDR=0x48000000
 BOOTARGS_BASE='root=/dev/fit0 rootwait'
 UBOOTENV_VOL=0x1f000

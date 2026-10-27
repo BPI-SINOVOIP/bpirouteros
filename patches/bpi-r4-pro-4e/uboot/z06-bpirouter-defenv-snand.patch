@@ -1,6 +1,6 @@
 --- a/defenvs/bananapi_bpi-r4-pro-4e_snand_env
 +++ b/defenvs/bananapi_bpi-r4-pro-4e_snand_env
-@@ -1,67 +1,42 @@
+@@ -1,67 +1,43 @@
 -ipaddr=192.168.1.1
 -serverip=192.168.1.254
 +ipaddr=10.1.1.3
@@ -68,7 +68,7 @@
 -mmc_write_vol=imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc erase 0x$part_addr 0x$image_size && mmc write $loadaddr 0x$part_addr 0x$image_size
 -emmc_init=mmc dev 0 && mmc bootbus 0 0 0 0 && run emmc_init_bl && run emmc_init_openwrt ; env default bootcmd ; saveenv ; saveenv
 +mmc_write_vol=imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc erase 0x$part_addr 0x$part_size && mmc write $loadaddr 0x$part_addr 0x$image_size
-+emmc_init=mmc dev 0 && mmc bootbus 0 0 0 0 && run emmc_init_bl && run emmc_write_env && run emmc_init_openwrt
++emmc_init=mmc dev 0 && mmc bootbus 0 0 0 0 && run emmc_init_bl && run emmc_write_env && run emmc_init_openwrt && run emmc_erase_cfgstage
  emmc_init_bl=run ubi_read_emmc_install && setenv fileaddr $loadaddr && run emmc_write_bl2 && setexpr fileaddr $loadaddr + 0x100000 && run emmc_write_fip && setexpr fileaddr $loadaddr + 0x500000 && run emmc_write_hdr
 -emmc_init_openwrt=run ubi_read_recovery && iminfo $loadaddr && run emmc_write_recovery ; run ubi_read_production && iminfo $loadaddr && run emmc_write_production
 +emmc_init_openwrt=run ubi_read_production && iminfo $loadaddr && run emmc_write_production && run emmc_write_production_b
@@ -79,6 +79,7 @@
 -emmc_write_recovery=part start mmc 0 $part_recovery part_addr && part size mmc 0 $part_recovery part_size && run mmc_write_vol
 +emmc_write_production_b=part start mmc 0 production_b part_addr && part size mmc 0 production_b part_size && run mmc_write_vol
 +emmc_write_env=setexpr envaddr $loadaddr + 0x600000 && mmc write $envaddr 0x2000 0x200 && mmc write $envaddr 0x2200 0x200
++emmc_erase_cfgstage=if part start mmc 0 cfgstage part_addr && part size mmc 0 cfgstage part_size && mmc erase 0x$part_addr 0x$part_size ; then else echo "*** cfgstage not erased ***" ; fi
  _init_env=setenv _init_env ; run ubi_create_env ; saveenv ; saveenv
 -_firstboot=setenv _firstboot ; run _switch_to_menu ; run _init_env ; run boot_first
 -_switch_to_menu=setenv _switch_to_menu ; setenv bootdelay 3 ; setenv bootmenu_delay 3 ; setenv bootmenu_0 $bootmenu_0d ; setenv bootmenu_0d ; run _bootmenu_update_title

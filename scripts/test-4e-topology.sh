@@ -1,5 +1,5 @@
 #!/bin/bash
-# Task 22-D steps 3/4: compile actual DTS, apply storage/WAN overlays and
+# Compile actual DTS, apply storage/WAN overlays and
 # inspect a fixture FIT container (not a bootable kernel or firmware image).
 # Requires a host dtc (DTC may name an existing OpenWrt host executable), cc,
 # Python 3 and the downloaded pinned kernel archive. No OpenWrt tree mutation.

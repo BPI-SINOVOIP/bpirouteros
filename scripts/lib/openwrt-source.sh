@@ -49,6 +49,8 @@ bpir_reset_openwrt_source() {
         target/linux/mediatek/patches-6.12 \
         target/linux/mediatek/filogic/base-files/etc/init.d/bpirouter-as21xxx-fw \
         target/linux/mediatek/filogic/base-files/etc/uci-defaults/99-bpirouter-as21xxx-fw \
+        target/linux/mediatek/filogic/base-files/etc/uci-defaults/99-bpirouter-combo-led-activity \
+        target/linux/mediatek/filogic/base-files/lib/functions/bpirouter-combo-leds.sh \
         package/boot/uboot-mediatek/patches \
         package/boot/arm-trusted-firmware-mediatek/patches \
         package/network/config/netifd/patches/900-bpirouter-refresh-dynamic-ip6assign.patch \

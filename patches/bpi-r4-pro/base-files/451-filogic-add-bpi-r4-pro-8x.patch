@@ -9,7 +9,7 @@
 +  DEVICE_DTS := mt7988a-bananapi-bpi-r4-pro-8x
 +  DEVICE_DTS_CONFIG := config-mt7988a-bananapi-bpi-r4-pro-8x
 +  $(call Device/bananapi_bpi-r4-common)
-+  DEVICE_DTS_OVERLAY := mt7988a-bananapi-bpi-r4-pro-8x-emmc mt7988a-bananapi-bpi-r4-pro-8x-sd
++  DEVICE_DTS_OVERLAY := mt7988a-bananapi-bpi-r4-pro-8x-emmc mt7988a-bananapi-bpi-r4-pro-8x-sd mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp mt7988a-bananapi-bpi-r4-pro-8x-lan-sfp
 +  # r4-pro is DDR4 8GB (8X): use the DDR4_4BG_MODE BL2 so DRAM is sized as 8GB
 +  # (the shared *-comb BL2 caps at 4GB). BL31/u-boot FIP and the GPT are unchanged.
 +  ARTIFACT/emmc-preloader.bin	:= mt7988-bl2 emmc-comb-4bg

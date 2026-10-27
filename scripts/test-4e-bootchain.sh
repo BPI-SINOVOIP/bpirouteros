@@ -1,5 +1,5 @@
 #!/bin/bash
-# Task 22-D step 2: verify 4E boot inputs in scratch, without preparing OpenWrt
+# Verify 4E boot inputs in scratch, without preparing OpenWrt
 # or claiming a compiled FIP / hardware result. Shared templates stay unchanged.
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -166,11 +166,11 @@ for board in bpi-r3 bpi-r3-mini bpi-r4 bpi-r4-lite bpi-r4-pro openwrt-one; do
 done
 echo 'PASS: three-media WAN selection command checks and unchanged six-board templates'
 
-# Identity-only state remains non-release and non-A/B until later build gates.
+# Check that the implemented 4E boot chain enables A/B provisioning.
 source "$SCRIPT_DIR/boards.sh"
 board_init bpi-r4-pro-4e
-[ "$AB_ENABLED" = no ] || fail "step 2 prematurely enabled A/B"
-[ "$BOARD_IMPLEMENTED" = no ] || fail "step 2 prematurely declared a complete board"
+[ "$AB_ENABLED" = yes ] || fail "4E A/B execution plane (env seed) is not enabled"
+[ "$BOARD_IMPLEMENTED" = yes ] || fail "4E is not declared implemented"
 case " $VALID_BOARDS " in
     *" bpi-r4-pro-4e "*) fail "step 2 prematurely joined the release set" ;;
 esac

@@ -68,6 +68,11 @@ RELEASE=$(q "$LOCK" release)
 [ -n "$RELEASE" ] || bad "lock has no release id"
 DOWNLOADS_SHA=$(q "$LOCK" downloads_lock_sha256)
 [[ "$DOWNLOADS_SHA" =~ ^[0-9a-f]{64}$ ]] || bad "lock has no valid downloads_lock_sha256"
+if [ -n "$(q "$LOCK" source_delivery)" ]; then
+    [ "$SCOPE" = tree ] || bad "a public source delivery lock is not firmware build provenance"
+    python3 "$SCRIPT_DIR/lib/public-source-lock.py" --tree "$BUILD_DIR" --check "$LOCK" \
+        || bad "public source delivery does not match its original firmware lock"
+fi
 source "$SCRIPT_DIR/boards.sh"
 bpir_select_release_boards "$RELEASE"
 read -r -a RELEASE_BOARDS <<<"$VALID_BOARDS"

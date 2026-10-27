@@ -37,6 +37,7 @@ imports = 'if [ "$BOARD" = bpi-r4-pro-4e ]; then' + prepare.split('if [ "$BOARD"
 dest = tmp / 'generic'
 setup = f'BUILD_DIR={shlex.quote(str(build))}; BOARD=bpi-r4-pro-4e; '
 setup += f'KERNEL_BACKPORT_DIR={shlex.quote(str(dest / "backport"))}; KERNEL_PENDING_DIR={shlex.quote(str(dest / "pending"))}; '
+setup += f'KERNEL_PATCH_DIR={shlex.quote(str(dest / "target"))}; '
 setup += 'step() { :; }; ok() { :; }; fail() { echo "$*" >&2; exit 1; }; '
 subprocess.run(['bash', '-ec', setup + injector + '\n' + imports], check=True, stdout=subprocess.DEVNULL)
 for prefix, layer, count in [('930-', 'backport', 22), ('931-', 'pending', 19)]:
@@ -44,6 +45,12 @@ for prefix, layer, count in [('930-', 'backport', 22), ('931-', 'pending', 19)]:
     expected = {p.name[7:]: p.read_bytes() for p in originals}
     actual = {p.name: p.read_bytes() for p in (dest / layer).iterdir()}
     assert len(expected) == count and actual == expected
+# Every 8X-local fix to the shared MxL driver reaches the 4E unchanged, and
+# no other 8X target patch does.
+mxl_fixes = {p.name: p.read_bytes() for p in sorted((build / 'patches/bpi-r4-pro/kernel').glob('*.patch'))
+             if not p.name.startswith(('930-', '931-')) and '+++ b/drivers/net/dsa/mxl862xx/' in p.read_text()}
+assert list(mxl_fixes) == ['987-mxl862xx-retry-initial-phy-id.patch']
+assert {p.name: p.read_bytes() for p in (dest / 'target').iterdir()} == mxl_fixes
 network = (base / 'etc/board.d/02_network').read_text().split('\nboard_config_update', 1)[0]
 assert shell(network, 'ucidef_set_interfaces_lan_wan() { echo "$1|$2"; }',
              f'mediatek_setup_interfaces {identity}') == \
@@ -76,8 +83,8 @@ for package in ['kmod-dsa-mxl862xx', 'mt7988-2p5g-phy-firmware']:
     assert f'CONFIG_PACKAGE_{package}=y' in config
 assert not re.search(r'^CONFIG_PACKAGE_.*(?:as21|4bg).*=[ym]$', config, re.M)
 assert not (base / 'etc/init.d/bpirouter-as21xxx-fw').exists()
-# Shared generic stack participates in 4E provenance; 8X-only target changes
-# must not change that 4E preparation input identity.
+# Shared generic stack and MxL driver fix participate in 4E provenance; 8X-only
+# target changes must not change that 4E preparation input identity.
 spec = importlib.util.spec_from_file_location('provenance', build / 'scripts/release-build-provenance.py')
 p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
 scratch = tmp / 'inputs'
@@ -89,6 +96,10 @@ b = p.prepare_input_id(scratch, 'bpi-r4-pro-4e')
 assert a != b
 (shared / '996-8x-only.patch').write_text('not a 4E input\n')
 assert b == p.prepare_input_id(scratch, 'bpi-r4-pro-4e')
+fix = shared / '987-mxl862xx-retry-initial-phy-id.patch'; fix.write_text('first\n')
+c = p.prepare_input_id(scratch, 'bpi-r4-pro-4e')
+fix.write_text('changed\n')
+assert len({b, c, p.prepare_input_id(scratch, 'bpi-r4-pro-4e')}) == 3
 # Rootfs fixtures are intentionally not image evidence.
 root = tmp / 'root'
 for path in ['lib/modules/fixture', 'lib/firmware/mediatek/mt7988', 'etc/modules.d', 'etc/init.d']:

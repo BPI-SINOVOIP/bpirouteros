@@ -33,19 +33,20 @@
 -bootmenu_8=Reset all settings to factory defaults.=run reset_factory ; reset
 -boot_first=if button reset ; then led $bootled_rec on ; run boot_tftp_recovery ; setenv flag_recover 1 ; run boot_default ; fi ; bootmenu
 -boot_default=if env exists flag_recover ; then else run bootcmd ; fi ; run boot_recovery ; setenv replacevol 1 ; run boot_tftp_forever
-+bootdelay=1
-+bootfile=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-8x-squashfs-sysupgrade.itb
-+bootled_pwr=act
-+bootled_rec=err
- boot_production=led $bootled_pwr on ; run sdmmc_read_production && bootm $loadaddr#$bootconf#$bootconf_sd#$bootconf_extra ; led $bootled_pwr off
+-boot_production=led $bootled_pwr on ; run sdmmc_read_production && bootm $loadaddr#$bootconf#$bootconf_sd#$bootconf_extra ; led $bootled_pwr off
 -boot_recovery=led $bootled_rec on ; run sdmmc_read_recovery && bootm $loadaddr#$bootconf#$bootconf_emmc ; led $bootled_rec off
 -boot_sdmmc=run boot_production ; run boot_recovery
 -boot_tftp_forever=led $bootled_rec on ; while true ; do run boot_tftp_recovery ; sleep 1 ; done
 -boot_tftp_production=tftpboot $loadaddr $bootfile_upg && env exists replacevol && iminfo $loadaddr && run sdmmc_write_production ; if env exists noboot ; then else bootm $loadaddr#$bootconf#$bootconf_sd#$bootconf_extra ; fi
 -boot_tftp_recovery=tftpboot $loadaddr $bootfile && env exists replacevol && iminfo $loadaddr && run sdmmc_write_recovery ; if env exists noboot ; then else bootm $loadaddr#$bootconf#$bootconf_sd ; fi
 -boot_tftp=tftpboot $loadaddr $bootfile && bootm $loadaddr#$bootconf#$bootconf_sd
++bootdelay=1
++bootfile=openwrt-mediatek-filogic-bananapi_bpi-r4-pro-8x-squashfs-sysupgrade.itb
++bootled_pwr=act
++bootled_rec=err
++boot_production=led $bootled_pwr on ; run sdmmc_read_production && run r4pro_8x_select_media && bootm $loadaddr#$bootconf#$bootconf_sd#$bootconf_extra ; led $bootled_pwr off
 +boot_sdmmc=run boot_production
-+boot_tftp_production=tftpboot $loadaddr $bootfile && env exists replacevol && iminfo $loadaddr && run sdmmc_write_production ; if env exists noboot ; then else bootm $loadaddr#$bootconf#$bootconf_sd#$bootconf_extra ; fi
++boot_tftp_production=tftpboot $loadaddr $bootfile && env exists replacevol && iminfo $loadaddr && run sdmmc_write_production ; if env exists noboot ; then else run r4pro_8x_select_media && bootm $loadaddr#$bootconf#$bootconf_sd#$bootconf_extra ; fi
  mmc_write_vol=imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc erase 0x$part_addr 0x$image_size && mmc write $loadaddr 0x$part_addr 0x$image_size
  mmc_read_vol=mmc read $loadaddr $part_addr 0x100 && imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc read $loadaddr 0x$part_addr 0x$image_size && setexpr filesize $image_size * 0x200
  part_default=production
@@ -67,7 +68,7 @@
  ubi_init_bl=run sdmmc_read_snand_bl2 && run snand_write_bl2 && run sdmmc_read_snand_fip && run ubi_write_fip
  ubi_init_emmc_install=run sdmmc_read_emmc_install && run ubi_write_emmc_install
  ubi_prepare_rootfs=if ubi check rootfs_data ; then else if env exists rootfs_data_max ; then ubi create rootfs_data $rootfs_data_max dynamic || ubi create rootfs_data - dynamic ; else ubi create rootfs_data - dynamic ; fi ; fi
-@@ -59,8 +33,5 @@
+@@ -59,8 +33,9 @@
  ubi_write_fip=run ubi_remove_rootfs ; ubi check fip && ubi remove fip ; ubi create fip 0x200000 static ; ubi write $loadaddr fip 0x200000
  ubi_write_emmc_install=ubi check emmc_install && ubi remove emmc_install ; ubi create emmc_install 0x800000 dynamic ; ubi write $loadaddr emmc_install 0x800000
  ubi_write_production=ubi check fit && ubi remove fit ; run ubi_remove_rootfs ; ubi create fit $filesize dynamic && ubi write $loadaddr fit $filesize
@@ -77,4 +78,8 @@
 -_switch_to_menu=setenv _switch_to_menu ; setenv bootdelay 3 ; setenv bootmenu_delay 3 ; setenv bootmenu_0 $bootmenu_0d ; setenv bootmenu_0d ; run _bootmenu_update_title
 -_bootmenu_update_title=setenv _bootmenu_update_title ; setenv bootmenu_title "$bootmenu_title       [33m$ver[0m"
 +bootcmd=led act on ; led err on ; run ubi_init && run ubi_prepare_rootfs ; if test $? = 0 ; then led act off ; led err off ; else led act off ; led err on ; fi
++r4pro_8x_select_media=setenv bootconf config-mt7988a-bananapi-bpi-r4-pro-8x ; run r4pro_8x_select_wan ; run r4pro_8x_select_lan ; echo "SKU=bpi-r4-pro-8x wan=[$r4pro_8x_wan_media] selected=$r4pro_8x_wan_selected lan=[$r4pro_8x_lan_media] selected=$r4pro_8x_lan_selected bootconf=$bootconf"
++r4pro_8x_select_wan=if test "$r4pro_8x_wan_media" = sfp ; then setenv r4pro_8x_wan_selected sfp ; setenv bootconf $bootconf#mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp ; else setenv r4pro_8x_wan_selected copper ; if test -n "$r4pro_8x_wan_media" && test "$r4pro_8x_wan_media" != copper ; then echo "WARNING: invalid r4pro_8x_wan_media; using copper" ; fi ; fi
++r4pro_8x_select_lan=if test "$r4pro_8x_lan_media" = sfp ; then setenv r4pro_8x_lan_selected sfp ; setenv bootconf $bootconf#mt7988a-bananapi-bpi-r4-pro-8x-lan-sfp ; else setenv r4pro_8x_lan_selected copper ; if test -n "$r4pro_8x_lan_media" && test "$r4pro_8x_lan_media" != copper ; then echo "WARNING: invalid r4pro_8x_lan_media; using copper" ; fi ; fi
++preboot=run r4pro_8x_select_media
 \ No newline at end of file

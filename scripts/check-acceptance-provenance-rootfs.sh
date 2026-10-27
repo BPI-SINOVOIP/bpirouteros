@@ -93,6 +93,9 @@ with open(inventory, "r", encoding="ascii", newline="") as f:
                 raise SystemExit("boot-time payload path is outside the frozen boundary")
         elif path not in allowed_exact and not path.startswith(allowed_prefixes):
             raise SystemExit("payload path is outside the selected product boundary")
+        # Acceptance tools are delivered beside the image, never inside it.
+        if path.startswith("/usr/share/bpirouter/acceptance/"):
+            raise SystemExit("payload inventory carries formal acceptance tools")
         if path in seen:
             raise SystemExit("duplicate payload path")
         seen.add(path)
@@ -102,14 +105,9 @@ if header != 1 or declared_trees != trees or not rows:
 required_tools = {
     "/etc/init.d/bpirouter-ota-restore",
     "/usr/libexec/bpirouter-ota-restore",
-    "/usr/share/bpirouter/acceptance/cell-acceptance.sh",
-    "/usr/share/bpirouter/acceptance/qos-acceptance.sh",
-    "/usr/share/bpirouter/acceptance/seg-acceptance.sh",
-    "/usr/share/bpirouter/acceptance/tel-acceptance.sh",
-    "/usr/share/bpirouter/acceptance/lib/acceptance-common.sh",
 }
 if not required_tools.issubset({path for kind, _, _, _, path in rows if kind == "F"}):
-    raise SystemExit("acceptance tool bundle is incomplete")
+    raise SystemExit("OTA restore payload is incomplete")
 if {path for kind, _, _, _, path in rows if kind == "B"} != boot_exact:
     raise SystemExit("boot-time payload set is incomplete")
 

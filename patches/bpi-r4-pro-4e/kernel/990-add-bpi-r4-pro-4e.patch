@@ -2,9 +2,8 @@ arm64: dts: mediatek: add independent BPI-R4 Pro 4E topology
 
 Use the shared PCB storage/peripheral wiring, but the 4E network population.
 No 8X include, AS21 PHY, PHY reset sequence or switch reprobe is introduced.
-Both WAN paths start disabled; one step-4 overlay attaches the selected PHY
-or SFP cage. Source checks are not hardware evidence.
-See ../NETWORK-TOPOLOGY.md for schematic and upstream numbering references.
+Both WAN paths start disabled; a WAN overlay attaches the selected PHY
+or SFP cage. Wiring follows BPI-R4Pro-V10-SCH-20250806, CM14/CM17/CM99 (4E).
 
 --- a/arch/arm64/boot/dts/mediatek/Makefile
 +++ b/arch/arm64/boot/dts/mediatek/Makefile
@@ -31,7 +30,7 @@ See ../NETWORK-TOPOLOGY.md for schematic and upstream numbering references.
 +/*
 + * Banana Pi BPI-R4 Pro 4E (MT7988A).
 + * Wiring: BPI-R4Pro-V10-SCH-20250806, CM14/CM17/CM99 (4E).
-+ * See NETWORK-TOPOLOGY.md for address and upstream port-number evidence.
++ * MxL port numbers follow the upstream driver firmware numbering.
 + * This is independent of the 8X DTS: no external 10G copper PHY.
 + */
 +

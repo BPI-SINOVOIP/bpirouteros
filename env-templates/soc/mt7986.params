@@ -1,4 +1,4 @@
-# mt7986 (R3 / R3-mini) per-SoC env constants (FIRMWARE_ROLLBACK §10.6.3).
+# mt7986 (R3 / R3-mini) per-SoC env constants.
 # Values with $loadaddr / && are single-quoted (u-boot env text, not shell).
 # mt7986 NAND has 0x40000 erase blocks (vs mt7988 0x80000) and a 0x1f000 ubootenv vol.
 LOADADDR=0x46000000

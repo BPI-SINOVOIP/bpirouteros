@@ -68,7 +68,7 @@ fixture() {
 	mkdir -p "$root/sys/bus/mdio_bus/devices/mdio-bus:1c" \
 		"$root/sys/bus/mdio_bus/devices/mdio-bus:18" \
 		"$root/sys/bus/mdio_bus/devices/mdio-bus:10" \
-		"$root/sys/class/net" "$root/drivers" "$root/proc/device-tree" "$root/lib/firmware"
+		"$root/sys/class/net" "$root/drivers" "$root/proc/device-tree/chosen" "$root/lib/firmware"
 	printf '%s\0' 'Banana Pi BPI-R4 Pro 8X' > "$root/proc/device-tree/model"
 	: > "$root/lib/firmware/as21x1x_fw.bin"
 	: > "$root/sys/bus/mdio_bus/drivers_probe"
@@ -81,6 +81,14 @@ set_driver() {
 	mkdir -p "$root/drivers/$driver"
 	rm -f "$root/sys/bus/mdio_bus/devices/$phy/driver"
 	ln -s "$root/drivers/$driver" "$root/sys/bus/mdio_bus/devices/$phy/driver"
+}
+
+# The boot-time combo medium U-Boot records in /chosen; absent means copper.
+set_media() {
+	root=$1
+	combo=$2
+	medium=$3
+	printf '%s\0' "$medium" > "$root/proc/device-tree/chosen/bpirouter,$combo-media"
 }
 
 set_mxl_bound() {
@@ -107,6 +115,7 @@ load_service() {
 	root=$1
 	export BPIR_AS21XXX_SYSFS_ROOT="$root/sys"
 	export BPIR_AS21XXX_MODEL_FILE="$root/proc/device-tree/model"
+	export BPIR_AS21XXX_CHOSEN_DIR="$root/proc/device-tree/chosen"
 	export BPIR_AS21XXX_FW="$root/lib/firmware/as21x1x_fw.bin"
 	# shellcheck disable=SC1090
 	. "$SCRIPT"
@@ -272,7 +281,7 @@ load_service() {
 
 # The switch creates a netdev for port13 as soon as it attaches ANY phy, so a
 # combo PHY still on its generic pre-firmware identity yields five netdevs and
-# a dead 10G port. Observed on hardware 2026-09-04. Reporting that as the
+# a dead 10G port. Reporting that as the
 # complete topology is how a dead management port gets logged as ready.
 (
 	root="$TMP/combo-phy-generic"
@@ -367,6 +376,86 @@ load_service() {
 	boot && fail "partial first MxL probe was reported as complete"
 	[ "$load_count" -eq 1 ] || fail "partial first probe was retried"
 	mxl_base_ports_ready || fail "partial first probe did not preserve base ports"
+)
+
+# On the SFP medium the LAN combo does not use its AS21010P. A failed copper PHY
+# must neither be touched, waited for, nor reported as a dead 10G LAN port.
+(
+	root="$TMP/lan-sfp-copper-phy-failed"
+	fixture "$root"
+	set_media "$root" lan sfp
+	set_driver "$root" mdio-bus:1c 'Aeonsemi AS21010PB1'
+	set_driver "$root" mdio-bus:18 'Generic Clause 45 PHY'
+	PROBE_FAIL_PHY=mdio-bus:18
+	MXL_LOAD_MODE=full
+	load_service "$root"
+	boot || fail "an unused copper PHY failed an SFP LAN combo"
+	[ "$load_count" -eq 1 ] || fail "SFP LAN combo did not load MxL exactly once"
+	mxl_all_ports_ready || fail "SFP LAN combo with five ports was not ready"
+	! grep -q 'mdio-bus:18' "$ACTION_LOG" || fail "the unused LAN copper PHY was touched"
+	[ "$probe_wait_ticks" -eq 0 ] || fail "boot waited for the unused LAN copper PHY"
+	start || fail "diagnostics reported the unused LAN copper PHY"
+)
+
+# The same holds for the WAN combo, whose PHY is outside the MxL topology.
+(
+	root="$TMP/wan-sfp-copper-phy-failed"
+	fixture "$root"
+	set_media "$root" wan sfp
+	set_driver "$root" mdio-bus:1c 'Generic Clause 45 PHY'
+	set_driver "$root" mdio-bus:18 'Generic Clause 45 PHY'
+	PROBE_FAIL_PHY=mdio-bus:1c
+	MXL_LOAD_MODE=full
+	load_service "$root"
+	boot || fail "an unused copper PHY failed an SFP WAN combo"
+	! grep -q 'mdio-bus:1c' "$ACTION_LOG" || fail "the unused WAN copper PHY was touched"
+	mxl_all_ports_ready || fail "SFP WAN combo suppressed combo-LAN preparation"
+)
+
+# With both combos on SFP the AS21 firmware is not needed at all.
+(
+	root="$TMP/both-sfp-firmware-missing"
+	fixture "$root"
+	set_media "$root" wan sfp
+	set_media "$root" lan sfp
+	rm -f "$root/lib/firmware/as21x1x_fw.bin"
+	set_driver "$root" mdio-bus:1c 'Generic Clause 45 PHY'
+	set_driver "$root" mdio-bus:18 'Generic Clause 45 PHY'
+	MXL_LOAD_MODE=full
+	load_service "$root"
+	boot || fail "missing PHY firmware failed a board with both combos on SFP"
+	[ "$load_count" -eq 1 ] || fail "both-SFP boot did not load MxL exactly once"
+	! grep -q 'mdio-bus:' "$ACTION_LOG" || fail "both-SFP boot touched a copper PHY"
+	start || fail "diagnostics reported firmware that no selected medium needs"
+)
+
+# An SFP LAN combo still needs its netdev; four ports remain a degraded result.
+(
+	root="$TMP/lan-sfp-partial"
+	fixture "$root"
+	set_media "$root" lan sfp
+	set_driver "$root" mdio-bus:1c 'Aeonsemi AS21010PB1'
+	set_driver "$root" mdio-bus:18 'Aeonsemi AS21010PB1'
+	MXL_LOAD_MODE=partial
+	load_service "$root"
+	boot && fail "an SFP LAN combo without mxl_lan4 was reported as complete"
+	[ "$load_count" -eq 1 ] || fail "SFP partial probe was retried"
+	mxl_base_ports_ready || fail "SFP partial probe did not preserve base ports"
+)
+
+# An explicit copper record keeps every copper check.
+(
+	root="$TMP/lan-copper-explicit"
+	fixture "$root"
+	set_media "$root" wan copper
+	set_media "$root" lan copper
+	set_driver "$root" mdio-bus:1c 'Aeonsemi AS21010PB1'
+	set_driver "$root" mdio-bus:18 'Generic Clause 45 PHY'
+	PROBE_FAIL_PHY=mdio-bus:18
+	MXL_LOAD_MODE=full
+	load_service "$root"
+	boot && fail "explicit copper media hid a generic combo PHY"
+	! mxl_all_ports_ready || fail "explicit copper media accepted netdev presence alone"
 )
 
 

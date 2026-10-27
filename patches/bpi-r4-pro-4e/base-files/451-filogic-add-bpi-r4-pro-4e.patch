@@ -1,8 +1,7 @@
 filogic: register the 4E FIT and both exclusive WAN overlays
 
-Reuse ordinary MT7988 comb provisioning artifacts. The platform/package
-integration and build admission remain task 22-D steps 5/6; this definition
-does not make the SKU buildable through the product entry points yet.
+Reuse ordinary MT7988 comb provisioning artifacts. Register the board
+profile and select the WAN overlay for the requested medium.
 
 --- a/target/linux/mediatek/image/filogic.mk
 +++ b/target/linux/mediatek/image/filogic.mk

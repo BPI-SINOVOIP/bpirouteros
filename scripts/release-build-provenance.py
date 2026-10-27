@@ -180,10 +180,12 @@ def prepare_input_id(build_dir, board):
     for relative in inputs:
         add_tree(digest, root, relative)
     if board == "bpi-r4-pro-4e":
-        # prepare imports only the shared generic layers, not the 8X DTS.
+        # prepare imports the shared generic layers and the MxL driver fix,
+        # not the 8X DTS.
         for prefix in ("930-", "931-"):
             for path in sorted((root / "patches/bpi-r4-pro/kernel").glob(prefix + "*.patch")):
                 add_path(digest, root, path.relative_to(root))
+        add_tree(digest, root, Path("patches/bpi-r4-pro/kernel/987-mxl862xx-retry-initial-phy-id.patch"))
     return digest.hexdigest()
 
 
@@ -350,6 +352,26 @@ def run_hash_script(source_dir, mode, path):
         die(f"UI {mode} hash failed with exit {error.returncode}")
 
 
+def acceptance_bundle_sha(source_dir):
+    """Identity of the formal acceptance tool bundle built from this UI source.
+
+    The tools are delivered beside the image, so the on-device preflight binds
+    them to the build through this value rather than through the rootfs.
+    """
+    script = Path(source_dir) / "scripts" / "acceptance-bundle.sh"
+    if not script.is_file():
+        die(f"UI source has no acceptance bundle script at {script}")
+    try:
+        value = subprocess.check_output(
+            [str(script), "--sha", str(Path(source_dir) / "scripts")], text=True
+        ).strip()
+    except subprocess.CalledProcessError as error:
+        die(f"UI acceptance bundle identity failed with exit {error.returncode}")
+    if not re.fullmatch(r"[0-9a-f]{64}", value):
+        die("UI acceptance bundle identity is malformed")
+    return value
+
+
 def validate_ui_proof(proof, marker, feed_files=None):
     mode = proof.get("mode")
     if mode not in ("source", "artifact", "none"):
@@ -364,6 +386,8 @@ def validate_ui_proof(proof, marker, feed_files=None):
     if mode == "source":
         if proof.get("source_commit") != marker.get("ui_commit"):
             die("UI proof source commit does not match the prepared marker")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(proof.get("acceptance_bundle_sha256", ""))):
+            die("source UI proof has no acceptance_bundle_sha256")
     elif mode == "artifact":
         if proof.get("artifact_sha256") != marker.get("ui_artifact_sha256"):
             die("UI proof artifact does not match the prepared marker")
@@ -581,6 +605,7 @@ def cmd_ui_proof(args):
             "source_commit": head,
             "source_sha256": source_hash,
             "manifest_artifact_sha256": artifact_hash,
+            "acceptance_bundle_sha256": acceptance_bundle_sha(source),
         })
     Path(args.output).write_text(json.dumps(data, indent=2) + "\n")
 

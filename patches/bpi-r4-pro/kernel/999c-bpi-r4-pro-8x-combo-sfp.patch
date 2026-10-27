@@ -1,0 +1,253 @@
+arm64: dts: r4-pro: boot-time SFP media for both 8X combo ports
+
+Both 10G combo ports route one SerDes through a CM17 mux to either the
+AS21010P copper PHY or an SFP+ cage: GPIO3 for the WAN combo (MT7988
+USXGMII_1, eth1) and GPIO54 for the LAN combo (MxL SerDes port 13,
+mxl_lan4). The cages use the same nets as the 4E: SFP2 on PCA9545 channel 2
+with GPIO1/2/0 for MOD_ABS/LOS/TX_DISABLE, SFP1 on channel 1 with
+GPIO69/70/21.
+
+The base DTB stays the copper board unchanged, because environments that
+predate the media selector apply no media overlay. An overlay cannot delete
+the copper phy-handle, so each SFP attachment is a second, disabled node for
+the same MAC id or switch port, next to a disabled mux hog. The wan-sfp and
+lan-sfp overlays swap which node and hog are enabled and set
+/chosen/bpirouter,{wan,lan}-media; netdev names follow the MAC id and the
+port label, so eth1 and mxl_lan4 keep their names on either medium. The
+AS21010P nodes stay enabled; the PHY preparation service (469) reads the
+/chosen media and leaves the PHY of a combo booted on SFP untouched.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -29,6 +29,11 @@
+ 		stdout-path = "serial0:115200n8";
+ 		bootargs = "console=ttyS0,115200n1 pci=pcie_bus_perf ubi.block=0,fit root=/dev/fit0";
+ 		rootdisk-spim-nand = <&ubi_rootfs>;
++		/* Boot-time combo media. The copper default is the whole board for
++		 * environments that apply no media overlay; the SFP overlays replace
++		 * the value they select. */
++		bpirouter,wan-media = "copper";
++		bpirouter,lan-media = "copper";
+ 	};
+ 
+ 	fan: pwm-fan {
+@@ -97,6 +102,28 @@
+ 			default-state = "off";
+ 		};
+ 	};
++
++	/* CM17 SFP2: the WAN combo cage on MT7988 USXGMII_1 (GPIO3 high). */
++	sfp_wan: sfp-wan {
++		compatible = "sff,sfp";
++		i2c-bus = <&sfp_wan_i2c>;
++		mod-def0-gpios = <&pio 1 GPIO_ACTIVE_LOW>;
++		los-gpios = <&pio 2 GPIO_ACTIVE_HIGH>;
++		tx-disable-gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
++		maximum-power-milliwatt = <3000>;
++		status = "disabled";
++	};
++
++	/* CM17 SFP1: the LAN combo cage on MxL SerDes port 13 (GPIO54 low). */
++	sfp_lan: sfp-lan {
++		compatible = "sff,sfp";
++		i2c-bus = <&sfp_lan_i2c>;
++		mod-def0-gpios = <&pio 69 GPIO_ACTIVE_LOW>;
++		los-gpios = <&pio 70 GPIO_ACTIVE_HIGH>;
++		tx-disable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
++		maximum-power-milliwatt = <3000>;
++		status = "disabled";
++	};
+ };
+ 
+ &serial0 {
+@@ -324,6 +351,24 @@
+ 	status = "okay";
+ };
+ 
++&eth {
++	/* The WAN combo SFP attachment of MAC 1. An overlay cannot delete the
++	 * copper phy-handle above, so the SFP form is a second node for the same
++	 * MAC id and the WAN SFP overlay swaps which one is enabled. Netdevs are
++	 * registered by MAC id, so either form is eth1. */
++	gmac1_sfp: mac-sfp@1 {
++		compatible = "mediatek,eth-mac";
++		reg = <1>;
++		pcs-handle = <&sgmiipcs1>, <&usxgmiisys1>;
++		phys = <&xfi_tphy1>;
++		phy-mode = "10gbase-r";
++		phy-connection-type = "10gbase-r";
++		managed = "in-band-status";
++		sfp = <&sfp_wan>;
++		status = "disabled";
++	};
++};
++
+ &mdio_bus {
+ 	/* AS21010P 10G WAN PHY at 0x1c. No reset-gpios here: phylib can't cleanly
+ 	 * reset this firmware PHY, so it is reset in u-boot (board_late_init, see
+@@ -352,18 +397,34 @@
+ 		};
+ 	};
+ 
+-	wan_combo_copper_hog {
++	wan_combo_copper_hog: wan_combo_copper_hog {
+ 		gpio-hog;
+ 		gpios = <3 GPIO_ACTIVE_HIGH>;
+ 		output-low;
+ 	};
+ 
++	/* CM17: GPIO3 high routes USXGMII_1 to the WAN SFP cage. */
++	wan_combo_sfp_hog: wan_combo_sfp_hog {
++		gpio-hog;
++		gpios = <3 GPIO_ACTIVE_HIGH>;
++		output-high;
++		status = "disabled";
++	};
++
+ 	/* Pin the LAN combo to the populated copper AS21010P path. */
+-	lan_combo_copper_hog {
++	lan_combo_copper_hog: lan_combo_copper_hog {
+ 		gpio-hog;
+ 		gpios = <54 GPIO_ACTIVE_HIGH>;
+ 		output-high;
+ 	};
++
++	/* CM17: GPIO54 low routes the MxL SerDes to the LAN SFP cage. */
++	lan_combo_sfp_hog: lan_combo_sfp_hog {
++		gpio-hog;
++		gpios = <54 GPIO_ACTIVE_HIGH>;
++		output-low;
++		status = "disabled";
++	};
+ };
+ &gmac2 {
+ 	phy-mode = "10gbase-r";
+@@ -431,6 +492,18 @@
+ 				phy-handle = <&phy_10g_lan>;
+ 			};
+ 
++			/* The LAN combo SFP attachment of SerDes port 13. Like gmac1_sfp,
++			 * it is a second node for the same port that the LAN SFP overlay
++			 * enables in place of mxl_port13, keeping the label mxl_lan4. */
++			mxl_port13_sfp: port@d {
++				reg = <13>;
++				label = "mxl_lan4";
++				phy-mode = "10gbase-r";
++				managed = "in-band-status";
++				sfp = <&sfp_lan>;
++				status = "disabled";
++			};
++
+ 			mxl_cpu: port@9 {
+ 				reg = <9>;
+ 				label = "cpu";
+@@ -512,5 +585,18 @@
+ 				#gpio-cells = <2>;
+ 			};
+ 		};
++
++		/* eI2C1 and eI2C2 carry the two SFP+ cages (schematic block page). */
++		sfp_lan_i2c: i2c@1 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <1>;
++		};
++
++		sfp_wan_i2c: i2c@2 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <2>;
++		};
+ 	};
+ };
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -28,6 +28,8 @@
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-emmc.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-sd.dtbo
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-lan-sfp.dtbo
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-emmc.dtbo
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7988a-rfb-eth1-aqr.dtbo
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-lan-sfp.dtso
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * BPI-R4 Pro 8X: run the LAN combo (mxl_lan4) on its SFP+ cage instead
++ * of the AS21010P copper PHY. U-Boot applies this overlay when
++ * r4pro_8x_lan_media=sfp; without it the base DTB keeps copper.
++ */
++
++/dts-v1/;
++/plugin/;
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-8x", "mediatek,mt7988a";
++};
++
++&{/chosen} {
++	bpirouter,lan-media = "sfp";
++};
++
++&mxl_port13 {
++	status = "disabled";
++};
++
++&mxl_port13_sfp {
++	status = "okay";
++};
++
++&sfp_lan {
++	status = "okay";
++};
++
++&lan_combo_copper_hog {
++	status = "disabled";
++};
++
++&lan_combo_sfp_hog {
++	status = "okay";
++};
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp.dtso
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * BPI-R4 Pro 8X: run the WAN combo (eth1) on its SFP+ cage instead
++ * of the AS21010P copper PHY. U-Boot applies this overlay when
++ * r4pro_8x_wan_media=sfp; without it the base DTB keeps copper.
++ */
++
++/dts-v1/;
++/plugin/;
++
++/ {
++	compatible = "bananapi,bpi-r4-pro-8x", "mediatek,mt7988a";
++};
++
++&{/chosen} {
++	bpirouter,wan-media = "sfp";
++};
++
++&gmac1 {
++	status = "disabled";
++};
++
++&gmac1_sfp {
++	status = "okay";
++};
++
++&sfp_wan {
++	status = "okay";
++};
++
++&wan_combo_copper_hog {
++	status = "disabled";
++};
++
++&wan_combo_sfp_hog {
++	status = "okay";
++};

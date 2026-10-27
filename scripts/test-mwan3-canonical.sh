@@ -1,5 +1,5 @@
 #!/bin/bash
-# Executable QMF-15 development/build gate for the mwan3 canonical takeover.
+# Executable development/build gate for the mwan3 canonical takeover.
 #
 # The takeover decides "is this state OURS", not "is this one known upstream
 # file", so this gate no longer pins an upstream fingerprint.  It proves the
@@ -237,7 +237,7 @@ for board in bpi-r3-mini bpi-r3 bpi-r4-lite bpi-r4-pro bpi-r4 openwrt-one; do
 done
 for gate in "$BUILD_DIR/scripts/build-full.sh" "$BUILD_DIR/scripts/build-image.sh"; do
 	grep -Fq '"$SCRIPT_DIR/test-mwan3-canonical.sh"' "$gate" || \
-		fail "$(basename "$gate") does not run the QMF-15 build gate"
+		fail "$(basename "$gate") does not run the mwan3 build gate"
 done
 
-echo "PASS: QMF-15 product-state takeover, zero-write idempotence, exclusive ownership, and six-board payload contract ($mutation_count stock + $active_mutation_count active field mutations)"
+echo "PASS: mwan3 product-state takeover, zero-write idempotence, exclusive ownership, and six-board payload contract ($mutation_count stock + $active_mutation_count active field mutations)"

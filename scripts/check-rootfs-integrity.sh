@@ -9,24 +9,20 @@
 # 2. RUNTIME COMMAND DEPENDENCIES -- every external command the product's own
 #    on-device shell invokes is actually provided by this rootfs.
 #
-# (2) exists because it was missing. `lib/bpirouter/d21-preflight.sh` called
-# `stat -c %u` in the two predicates that gated every network/firewall/mwan3
-# action including boot, and no image ever shipped `stat`: it is not a busybox
-# default applet and nothing declared a dependency on it. Both predicates were
-# therefore constant-false on hardware. The shell layer's own 545-line suite
-# passed because it ran on a build host, where coreutils provides `stat` --
-# the divergence this check closes. It stayed invisible until a board wrote a
-# multi-WAN config for the first time, because the caller short-circuited on a
-# directory that does not exist until then; from that write onward the board
-# refused to start networking at boot.
-#
-# The fence is gone. This gate is what keeps its failure mode from returning
-# through any of the shell that remains.
+# Check runtime commands against the target rootfs, not the build host.
+# Host-installed utilities must not hide missing target dependencies.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ROOT=${1:-}
 fail() { echo "FAIL: rootfs integrity: $*" >&2; exit 1; }
+# Optional: the formal acceptance tool bundle that will run on this rootfs.
+ACCEPTANCE_TOOLS=
+if [ $# -gt 1 ]; then
+	[ $# -eq 3 ] && [ "$2" = --acceptance-tools ] \
+		|| fail "usage: $(basename "$0") <assembled-rootfs> [--acceptance-tools <bundle-dir>]"
+	ACCEPTANCE_TOOLS=$3
+fi
 
 # The rootfs must be supplied. This gate runs after ASSEMBLY, and the rc.d
 # links it checks are created by each package's postinst during assembly -- the
@@ -212,21 +208,22 @@ for shell_dir in \
 	[ -z "$found" ] || shell_files="${shell_files}${shell_files:+$'\n'}$found"
 done
 
-# Formal acceptance runners use capability-oriented names rather than the
-# bpirouter prefix and keep their shared library one level deeper. This tree is
-# part of every release image. Quick-mode development overlays intentionally do
-# not carry it, but once the directory exists it must not be redirected,
-# unreadable or hidden by a successful scan of unrelated init scripts. The
-# separate release provenance gate requires the exact bundle in release mode.
+# Formal acceptance tools are delivered beside the image (bpirouter-ui
+# scripts/acceptance-bundle.sh) and must never be packaged into it. They still
+# run on this rootfs, so a supplied bundle is scanned against its command
+# surface like the product's own shell; their names carry no bpirouter prefix
+# and the shared library sits one level deeper.
 acceptance_dir=$ROOT/usr/share/bpirouter/acceptance
-if [ -e "$acceptance_dir" ] || [ -L "$acceptance_dir" ]; then
-	[ -d "$acceptance_dir" ] && [ ! -L "$acceptance_dir" ] \
-		|| fail "formal acceptance tool directory is redirected or not a directory"
-	[ -d "$acceptance_dir/lib" ] && [ ! -L "$acceptance_dir/lib" ] \
-		|| fail "formal acceptance library directory is absent or redirected"
-	acceptance_files=$(find "$acceptance_dir" -maxdepth 2 -type f -name '*.sh') \
-		|| fail "cannot scan formal acceptance tool directory"
-	[ -n "$acceptance_files" ] || fail "formal acceptance tool directory contains no shell tools"
+[ ! -e "$acceptance_dir" ] && [ ! -L "$acceptance_dir" ] \
+	|| fail "rootfs carries formal acceptance tools at /usr/share/bpirouter/acceptance"
+if [ -n "$ACCEPTANCE_TOOLS" ]; then
+	[ -d "$ACCEPTANCE_TOOLS" ] && [ ! -L "$ACCEPTANCE_TOOLS" ] \
+		|| fail "acceptance tool bundle is redirected or not a directory: $ACCEPTANCE_TOOLS"
+	[ -d "$ACCEPTANCE_TOOLS/lib" ] && [ ! -L "$ACCEPTANCE_TOOLS/lib" ] \
+		|| fail "acceptance tool library directory is absent or redirected"
+	acceptance_files=$(find "$ACCEPTANCE_TOOLS" -maxdepth 2 -type f -name '*.sh') \
+		|| fail "cannot scan the acceptance tool bundle"
+	[ -n "$acceptance_files" ] || fail "acceptance tool bundle contains no shell tools"
 	shell_files="${shell_files}${shell_files:+$'\n'}$acceptance_files"
 fi
 shell_files=$(printf '%s\n' "$shell_files" | sort -u) \

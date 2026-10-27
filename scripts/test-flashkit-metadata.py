@@ -17,9 +17,27 @@ def digest(path):
 
 
 class FlashkitMetadataTest(unittest.TestCase):
-    def check_board(self, board, profile, soc, fip):
+    def check_board(self, board, profile, soc, fip, private=False):
         with tempfile.TemporaryDirectory(prefix='bpir-flashkit-metadata-') as temporary:
             root = Path(temporary)
+            build = root / 'bpirouter-build'
+            build.mkdir()
+            (build / 'flashkit').symlink_to(SCRIPTS.parent / 'flashkit', target_is_directory=True)
+            ui = root / 'bpirouter-ui'
+            guides = ui / 'docs/user' if private else build
+            guides.mkdir(parents=True, exist_ok=True)
+            source = SCRIPTS.parent
+            if not (source / 'INSTALLATION.md').exists():
+                source = source.parent / 'bpirouter-ui/docs/user'
+            names = ('FEATURES.md', 'FEATURES.zh-CN.md', 'INSTALLATION.md', 'INSTALLATION.zh-CN.md')
+            for guide in names:
+                (guides / guide).write_bytes((source / guide).read_bytes())
+            if private:
+                subprocess.run(['git', 'init', '-q', str(ui)], check=True)
+                subprocess.run(['git', '-C', str(ui), 'add', '.'], check=True)
+                subprocess.run(['git', '-C', str(ui), '-c', 'user.name=Fixture',
+                                '-c', 'user.email=fixture@example.invalid',
+                                'commit', '-qm', 'Customer guide fixture'], check=True)
             target = root / 'bin/targets/mediatek/filogic'
             target.mkdir(parents=True)
             base = f'openwrt-mediatek-filogic-{profile}'
@@ -35,7 +53,7 @@ class FlashkitMetadataTest(unittest.TestCase):
             unrelated = ''.join(f'{digest(p)} *{p.name}\n' for p in (sibling, profiles))
             sums = target / 'sha256sums'
             env = dict(os.environ, BPIR_WORK_DIR=str(root),
-                       BPIR_BUILD_DIR=str(SCRIPTS.parent))
+                       BPIR_BUILD_DIR=str(build))
             previous = None
             for stage in ('no-table', 'append', 'replace'):
                 with self.subTest(board=board, stage=stage):
@@ -48,9 +66,6 @@ class FlashkitMetadataTest(unittest.TestCase):
                                              '--board', board], env=env,
                                             capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    guides = SCRIPTS.parent
-                    if not (guides / 'INSTALLATION.md').exists():
-                        guides = SCRIPTS.parent.parent / 'bpirouter-ui/docs/user'
                     with tarfile.open(archive) as kit:
                         for guide in ('FEATURES.md', 'FEATURES.zh-CN.md',
                                       'INSTALLATION.md', 'INSTALLATION.zh-CN.md'):
@@ -80,6 +95,15 @@ class FlashkitMetadataTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('duplicate checksum entries', result.stderr)
             self.assertEqual(sums.read_text(), duplicate)
+            if private:
+                (guides / 'FEATURES.md').write_text('Uncommitted customer guidance\n')
+                result = subprocess.run(['bash', str(SCRIPTS / 'make-flashkit.sh'),
+                                         '--board', board], env=env, capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('user guide must match committed revision', result.stderr)
+
+    def test_committed_private_guides(self):
+        self.check_board('openwrt-one', 'openwrt_one', 'mt7981', 'ram', private=True)
 
     def test_r3_mini(self):
         self.check_board('bpi-r3-mini', 'bananapi_bpi-r3-mini', 'mt7986', 'snand')

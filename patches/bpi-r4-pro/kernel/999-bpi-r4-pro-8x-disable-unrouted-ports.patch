@@ -5,8 +5,8 @@ one 1G from the MT7988 internal switch (ETH5), and two RJ45+SFP combos. The DTS
 brought up in 990 enabled every internal-switch port anyway, so the kernel
 registered netdevs for ports with nothing behind them, and network.get_ports
 listed them as unconfigured physical ports -- a field tech would look for jacks
-that do not exist. Found during TEST-ACCEPTANCE §9.3 on r4-pro and resolved
-against BPI-R4Pro-V10-SCH-20250806, sheets CM17/CM18. The upstream MxL driver
+that do not exist. BPI-R4Pro-V10-SCH-20250806, sheets CM17/CM18, defines
+the physical routing. The upstream MxL driver
 DTS in 996 defines only the four routed firmware ports (1..4), so it needs no
 separate disabled spare-port node.
 
@@ -16,10 +16,8 @@ separate disabled spare-port node.
   lan4  gsw_port3  ETH8/CN37 = the GbE FPC expansion connector,
                    real hardware but not a panel jack            -> kept
 
-Verified on the former four-port development baseline: cabling the 1G jack
-brings up lan1 and the 2.5G jacks bring up mxl_lan1/mxl_lan2. The real combo-LAN
-path is not either disabled internal-switch port: the later 997a stage exposes
-it from upstream MxL port13 as mxl_lan4; see BACKLOG N15.
+The combo-LAN path is not either disabled internal-switch port: patch 997a
+exposes it from upstream MxL port13 as mxl_lan4.
 
 --- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
@@ -45,7 +43,7 @@ it from upstream MxL port13 as mxl_lan4; see BACKLOG N15.
  &gsw_port3 {
 +	/* GBE_P3 goes to ETH8 (CN37), the GbE FPC expansion connector -- real
 +	 * hardware, but not a front-panel jack. Kept enabled and labelled so an
-+	 * FPC daughterboard works; see BACKLOG N24 for why it is called out. */
++	 * FPC daughterboard connects to this port. */
  	label = "lan4";
  };
  

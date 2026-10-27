@@ -1,4 +1,4 @@
-# bpi-r4-pro-4e (BPI-R4 Pro 4E) u-boot defenv params (FIRMWARE_ROLLBACK.md §10.6).
+# bpi-r4-pro-4e (BPI-R4 Pro 4E) u-boot defenv params.
 # Same MT7988A SoC as r4 -> reuses ../soc/mt7988.params. A new board = new params
 # + vendored pristine. WAN selection uses the shared bootm hooks below.
 SOC_ENV=mt7988                                              # ../soc/mt7988.params (LOADADDR/BOOTARGS_BASE/NAND geom)

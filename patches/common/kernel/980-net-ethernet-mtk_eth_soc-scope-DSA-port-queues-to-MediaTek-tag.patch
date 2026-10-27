@@ -1,0 +1,50 @@
+net: ethernet: mtk_eth_soc: scope DSA port queues to the MediaTek tag
+
+mtk_select_queue() sends a DSA conduit's frames through queue
+skb_get_queue_mapping() + 3, and mtk_device_event() rate-limits queue
+dp->index + 3 to that user port's link speed. Only the MediaTek tagger
+sets the queue mapping to the port index, so the scheme is sound only for
+MediaTek-tagged switches; the QDMA queues are shared by all MACs.
+
+On a SoC that also carries a switch with another tagger (BPI-R4 Pro:
+MxL862xx behind its own GMAC), that conduit's frames all leave with
+queue mapping 0, land in queue 3 and inherit the link rate of MediaTek
+switch port 0, incorrectly limiting egress to an unrelated port's speed.
+The other tagger's port speeds also reprogram queues owned by MediaTek
+switch ports.
+
+Use the per-port queues, and their rate limits, only for conduits whose
+tag protocol is DSA_TAG_PROTO_MTK. Any other conduit transmits on its MAC
+queue like a non-DSA port.
+
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -3748,6 +3748,13 @@
+ 	if (!dsa_user_dev_check(dev))
+ 		return NOTIFY_DONE;
+ 
++	/* Only MediaTek-tagged conduits map a user port to queue index + 3
++	 * (see mtk_select_queue). Ports behind another tag share no such
++	 * mapping, so their speed must not reprogram another port's queue.
++	 */
++	if (!mtk_uses_dsa(ldev))
++		return NOTIFY_DONE;
++
+ 	if (__ethtool_get_link_ksettings(dev, &s))
+ 		return NOTIFY_DONE;
+ 
+@@ -5059,7 +5066,13 @@
+ 	struct mtk_mac *mac = netdev_priv(dev);
+ 	unsigned int queue = 0;
+ 
+-	if (netdev_uses_dsa(dev))
++	/* Queue index + 3 is the per-port queue that mtk_device_event()
++	 * rate-limits to the port's link speed, and only the MediaTek tagger
++	 * sets that index. A conduit for another tagger would otherwise send
++	 * every frame through queue 3 and inherit the speed of MediaTek switch
++	 * port 0 (BPI-R4 Pro: all MxL862xx ports capped at lan1's link rate).
++	 */
++	if (mtk_uses_dsa(dev))
+ 		queue = skb_get_queue_mapping(skb) + 3;
+ 	else
+ 		queue = mac->id;

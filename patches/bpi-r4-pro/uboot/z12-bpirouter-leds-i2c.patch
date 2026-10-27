@@ -2,9 +2,9 @@ bpirouter: r4-pro u-boot LEDs via i2c2 PCA9555 mux (err/act)
 
 Enable u-boot to drive the two front-panel system LEDs during provisioning.
 err (red, pca9555 IO1_7) / act (blue, IO1_6) sit behind SoC i2c2 -> pca9545
-mux(0x70) ch0 -> pca9555(0x20). LEDs are ACTIVE_HIGH (real-machine: on/off
-matched only with active-high; the SYS_LEDxn net name suggested low but the
-pca9555 drive is high-side). Add the i2c2 chain (after &i2c1) + a gpio-leds
+mux(0x70) ch0 -> pca9555(0x20). LEDs are ACTIVE_HIGH because the PCA9555
+drive is high-side despite the SYS_LEDxn net names.
+Add the i2c2 chain (after &i2c1) + a gpio-leds
 node to the board dtsi, and enable CMD_I2C / DM_I2C / SYS_I2C_MTK / I2C_MUX
 / I2C_MUX_PCA954x / DM_PCA953X on all three defconfigs (LED/LED_GPIO/CMD_LED
 already on). label=act/err so the defenv can do `led act/err on`.

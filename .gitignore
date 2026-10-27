@@ -4,3 +4,5 @@
 /staging_dir/
 /bin/
 /dl/
+__pycache__/
+*.py[cod]

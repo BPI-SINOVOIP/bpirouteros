@@ -33,7 +33,7 @@ PARAMS="$SCRIPT_DIR/boards/$BOARD.params"
 # shellcheck disable=SC1090
 source "$PARAMS"
 # Per-SoC constants (LOADADDR/BOOTARGS_BASE/NAND geom) live in soc/<SOC_ENV>.params,
-# sourced after the board file sets SOC_ENV (FIRMWARE_ROLLBACK §10.6.3).
+# sourced after the board file sets SOC_ENV.
 [ -n "$SOC_ENV" ] && { SOCP="$SCRIPT_DIR/soc/$SOC_ENV.params"
     [ -f "$SOCP" ] || { echo "no soc params: $SOCP"; exit 1; }
     source "$SOCP"; }

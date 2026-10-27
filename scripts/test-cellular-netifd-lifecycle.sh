@@ -8,6 +8,7 @@ OPENWRT_SOURCE_HELPER=$BUILD_DIR/scripts/lib/openwrt-source.sh
 LIFECYCLE_PATCH=$BUILD_DIR/patches/common/base-files/004-cellular-netifd-lifecycle-owner.patch
 MANUFACTURER_PATCH=$BUILD_DIR/patches/common/base-files/005-comgt-ncm-normalize-manufacturer.patch
 DATA_FORMAT_PATCH=$BUILD_DIR/patches/common/base-files/006-uqmi-data-format-evidence.patch
+READY_PATCH=$BUILD_DIR/patches/common/base-files/007-uqmi-wait-qmi-ready.patch
 QMI=package/network/utils/uqmi/files/lib/netifd/proto/qmi.sh
 NCM=package/network/utils/comgt/files/ncm.sh
 QMI_MAKEFILE=package/network/utils/uqmi/Makefile
@@ -16,6 +17,7 @@ UQMI_CTL_PATCH=package/network/utils/uqmi/patches/100-fix-ctl-data-format-reques
 [ -f "$LIFECYCLE_PATCH" ] || { echo "missing cellular lifecycle patch" >&2; exit 1; }
 [ -f "$MANUFACTURER_PATCH" ] || { echo "missing NCM manufacturer normalization patch" >&2; exit 1; }
 [ -f "$DATA_FORMAT_PATCH" ] || { echo "missing QMI data-format evidence patch" >&2; exit 1; }
+[ -f "$READY_PATCH" ] || { echo "missing QMI readiness patch" >&2; exit 1; }
 [ -f "$PREPARE" ] || { echo "missing OpenWrt prepare script" >&2; exit 1; }
 [ -f "$OPENWRT_SOURCE_HELPER" ] || { echo "missing OpenWrt source helper" >&2; exit 1; }
 [ -f "$OPENWRT_DIR/$QMI" ] || { echo "missing qmi.sh source" >&2; exit 1; }
@@ -54,15 +56,20 @@ stage_source() {
 }
 
 stage_source
-for patch in "$LIFECYCLE_PATCH" "$MANUFACTURER_PATCH" "$DATA_FORMAT_PATCH"; do
-	if git -C "$check_dir" apply --check "$patch" 2>/dev/null; then
-		git -C "$check_dir" apply "$patch"
-	elif git -C "$check_dir" apply --reverse --check "$patch" 2>/dev/null; then
-		:
-	else
-		echo "cellular netifd patch neither applies nor matches the source tree: $patch" >&2
-		exit 1
+# A prepared build tree already carries the series, and later patches may use
+# an earlier patch's lines as context, so a per-patch reverse check cannot tell
+# "applied" from "conflicting". Unwind whatever is applied, newest first, then
+# replay the whole series in order.
+for patch in "$READY_PATCH" "$DATA_FORMAT_PATCH" "$MANUFACTURER_PATCH" "$LIFECYCLE_PATCH"; do
+	if git -C "$check_dir" apply --reverse --check "$patch" 2>/dev/null; then
+		git -C "$check_dir" apply --reverse "$patch"
 	fi
+done
+for patch in "$LIFECYCLE_PATCH" "$MANUFACTURER_PATCH" "$DATA_FORMAT_PATCH" "$READY_PATCH"; do
+	git -C "$check_dir" apply "$patch" 2>/dev/null || {
+		echo "cellular netifd patch does not apply to the source tree: $patch" >&2
+		exit 1
+	}
 done
 
 bash -n "$check_dir/$QMI" "$check_dir/$NCM"
@@ -233,6 +240,166 @@ fi
 	qmi_apply_data_format 802.3 "$scratch_dir/missing_raw_ip"
 )
 
+# A freshly enumerated modem refuses QMI clients for tens of seconds. The dial
+# waits, bounded, for WDA to answer, with a per-probe timeout long enough that a
+# slow allocation is completed rather than abandoned.
+(
+	INCLUDE_ONLY=1
+	. "$check_dir/$QMI"
+
+	uqmi() {
+		case " $* " in
+			*' --get-versions '*)
+				printf 'versions\n' >> "$order_log"
+				[ -n "$fake_versions" ] || return 1
+				printf '%s\n' "$fake_versions"
+				;;
+			*' --get-device-operating-mode '*)
+				dms_probes=$((dms_probes + 1))
+				[ "$dms_probes" -gt "$dms_fail" ] || return 1
+				printf 'dms-ok\n' >> "$order_log"
+				printf '%s\n' '"online"'
+				;;
+			*' --wda-get-data-format '*)
+				printf '%s\n' "$*" >> "$probe_log"
+				clock=$((clock + 1))
+				[ "$(wc -l < "$probe_log")" -gt "$fail_probes" ] || return 1
+				printf '%s\n' '{"link-layer-protocol":"raw-ip"}'
+				;;
+			*' --wda-set-data-format '*) return 1 ;;
+			*' --set-data-format '*) printf '%s\n' '"802.3"' ;;
+			*' --sync '*)
+				printf '%s\n' "$((clock - 100))" >> "$sync_log"
+				[ -z "$sync_clears" ] || fail_probes=0
+				;;
+			*) return 1 ;;
+		esac
+	}
+	qmi_read_json_value() {
+		local expression="$1" payload
+		payload=$(cat)
+		case "$expression:$payload" in
+			'@:'*'"802.3"'*) printf '%s\n' 802.3 ;;
+			'@["link-layer-protocol"]:'*'"raw-ip"'*) printf '%s\n' raw-ip ;;
+		esac
+	}
+	qmi_uptime() { echo "$clock"; }
+	sleep() { clock=$((clock + 1)); }
+
+	wda_versions='{"service_0":"1,5","service_1":"1,183","service_2":"1,76","service_26":"1,24"}'
+	# The fake reads its answer from fake_versions, not "versions": qmi_lacks_wda
+	# declares that name local and calls uqmi inside its scope.
+	fake_versions=$wda_versions
+	probe_log=$scratch_dir/qmi-ready.log
+	sync_log=$scratch_dir/qmi-sync.log
+	sync_clears=
+	order_log=$scratch_dir/qmi-order.log
+	: > "$order_log"
+	dms_probes=0
+	dms_fail=0
+	for fail_probes in 0 3; do
+		: > "$probe_log"
+		: > "$sync_log"
+		clock=100
+		qmi_wait_ready /dev/ignored > /dev/null || {
+			echo "QMI readiness wait gave up on a modem that became ready" >&2
+			exit 1
+		}
+		[ "$(wc -l < "$probe_log")" -eq $((fail_probes + 1)) ] || {
+			echo "QMI readiness wait did not stop at the first ready answer" >&2
+			exit 1
+		}
+		[ ! -s "$sync_log" ] || {
+			echo "QMI readiness wait released client IDs although WDA answered early" >&2
+			exit 1
+		}
+	done
+
+	# Refusal that only a CTL sync clears: one sync after QMI_SYNC_AFTER, then
+	# WDA answers and the wait ends.
+	: > "$probe_log"
+	: > "$sync_log"
+	clock=100
+	fail_probes=1000
+	sync_clears=1
+	qmi_wait_ready /dev/ignored > /dev/null || {
+		echo "QMI readiness wait did not recover a refusal that sync clears" >&2
+		exit 1
+	}
+	[ "$(wc -l < "$sync_log")" -eq 1 ] && [ "$(cat "$sync_log")" -ge "$QMI_SYNC_AFTER" ] || {
+		echo "QMI readiness wait did not sync exactly once after QMI_SYNC_AFTER" >&2
+		exit 1
+	}
+	[ "$clock" -le $((100 + QMI_SYNC_AFTER + 4)) ] || {
+		echo "QMI readiness wait kept waiting after sync cleared the refusal" >&2
+		exit 1
+	}
+	sync_clears=
+	grep -q -- '-t 5000 ' "$probe_log" || {
+		echo "QMI readiness probe uses a short timeout that can abandon a client" >&2
+		exit 1
+	}
+
+	# A WDA modem that never answers, and modems whose service list cannot
+	# prove that WDA is absent, wait for the full bound and then give up.
+	for fake_versions in "$wda_versions" '' '{"service_0":"1,5"}'; do
+		: > "$probe_log"
+		: > "$sync_log"
+		clock=100
+		fail_probes=1000
+		if qmi_wait_ready /dev/ignored > /dev/null; then
+			echo "QMI readiness wait reported a modem that never answered as ready" >&2
+			exit 1
+		fi
+		[ "$clock" -ge $((100 + QMI_READY_TIMEOUT)) ] && [ "$clock" -le $((100 + QMI_READY_TIMEOUT + 2)) ] || {
+			echo "QMI readiness wait is not bounded by QMI_READY_TIMEOUT" >&2
+			exit 1
+		}
+		[ "$(wc -l < "$sync_log")" -eq 1 ] || {
+			echo "QMI readiness wait did not sync exactly once while WDA stayed silent" >&2
+			exit 1
+		}
+	done
+
+	# A modem whose own service list has WDS but no WDA is not "not ready":
+	# once a QMI service (DMS) answers, it goes on to the CTL data-format path
+	# without waiting for WDA. The service list is not requested before that.
+	fake_versions='{"service_0":"1,5","service_1":"1,183","service_2":"1,76","service_10":"2,24"}'
+	: > "$probe_log"
+	: > "$order_log"
+	dms_probes=0
+	dms_fail=3
+	clock=100
+	fail_probes=1000
+	qmi_wait_ready /dev/ignored > /dev/null || {
+		echo "QMI readiness wait failed a modem without WDA" >&2
+		exit 1
+	}
+	dataformat=$(qmi_negotiate_data_format /dev/ignored)
+	[ "$dataformat" = 802.3 ] || {
+		echo "a modem without WDA did not reach the CTL data format after the readiness check" >&2
+		exit 1
+	}
+	[ "$clock" -le 108 ] || {
+		echo "a modem without WDA was held by the readiness wait ($((clock - 100)) s)" >&2
+		exit 1
+	}
+	[ "$(head -n 1 "$order_log")" = dms-ok ] || {
+		echo "the QMI service list was requested before any QMI service answered" >&2
+		exit 1
+	}
+)
+awk '
+	/^proto_qmi_setup\(\)/ { setup=1; next }
+	/^qmi_wds_stop\(\)/ { setup=0 }
+	setup && /^[[:space:]]*qmi_wait_ready "\$device"/ { waited=1 }
+	setup && $0 !~ /^[[:space:]]*#/ && /uqmi / && !waited { exit 1 }
+	END { if (!waited) exit 1 }
+' "$check_dir/$QMI" || {
+	echo "qmi.sh sends QMI commands before waiting for QMI readiness" >&2
+	exit 1
+}
+
 for script in "$check_dir/$QMI" "$check_dir/$NCM"; do
 	if grep -q 'pincode' "$script"; then
 		echo "netifd cellular proto still accepts or consumes pincode: $script" >&2
@@ -345,4 +512,4 @@ awk '
 	exit 1
 }
 
-echo "cellular netifd lifecycle and QMI data-format gate: PASS"
+echo "cellular netifd lifecycle, QMI data-format and readiness gate: PASS"

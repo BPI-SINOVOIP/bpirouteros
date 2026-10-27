@@ -13,7 +13,7 @@
 # and the frontend on the way past and then never uses them, so the operator
 # watches a build scroll by and reasonably concludes the image contains it.
 # What actually ships is whatever vintage each .apk happens to be.  The base
-# package owns early rootfs contracts such as QMF-15/QMF-16, so it has the same gate.
+# package owns early rootfs configuration, so it has the same freshness gate.
 #
 # Same contract as check-prepared.sh: report and stop, never repair. Rebuilding
 # the artifacts here would not help anyway -- only build-full.sh regenerates the
@@ -88,7 +88,7 @@ for d in "${SRC_DIRS[@]}"; do
 done
 for file in "${UI_ACCEPTANCE_FILES[@]}"; do
     [ -f "$file" ] && [ ! -L "$file" ] || die "missing or symlinked acceptance source: $file" \
-        "The exact four runners and shared library are production package inputs."
+        "The four runners and shared library are part of the UI source identity the package records."
 done
 [ -f "$UI_PACKAGE_MAKEFILE" ] || die "missing bpirouter-ui package Makefile: $UI_PACKAGE_MAKEFILE" \
     "The release package layout cannot be proven without its feed recipe."
@@ -112,7 +112,8 @@ if [ -s "$NEWER_LIST" ]; then
   $n file(s) changed since, e.g.:
 $(echo "$NEWER" | sed "s#$UI_DIR/#    #")
   Release mode packs the .apk, not the binaries it just compiled, so this image
-  would ship the older backend, frontend and/or acceptance bundle.
+  would ship the older backend and/or frontend, or record a UI source identity
+  that no longer matches the acceptance tools.
   Run: $SCRIPT_DIR/build-full.sh --board <board>"
 fi
 
@@ -135,7 +136,7 @@ if [ -s "$NEWER_LIST" ]; then
         "package  $(date -d @"$(stat -c %Y "$BASE_APK")" '+%Y-%m-%d %H:%M')  $(basename "$BASE_APK")
   $n file(s) changed since, e.g.:
 $(echo "$NEWER" | sed "s#$FEED_ROOT/#    #")
-  Release mode would omit the reviewed QMF-15/QMF-16 payload vintage.
+  Release mode would omit the current base-package payload.
   Run: $SCRIPT_DIR/build-full.sh --board <board>"
 fi
 

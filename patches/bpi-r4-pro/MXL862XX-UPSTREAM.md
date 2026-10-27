@@ -34,17 +34,17 @@ prepares that PHY first and then loads the switch module once before netifd.
 Do not restore a built-in MxL driver or a boot-time switch unbind/rebind: either
 would recreate a destructive second probe on every normal boot.
 
-## 8X initial PHY discovery correction (2026-09-08)
+## Initial PHY discovery correction
 
-The 8X-local `987-mxl862xx-retry-initial-phy-id.patch` is separate from the
-byte-identical 930/931 import; 4E does not inherit it. On the 2026-09-07
-development image, a subsequent 8X boot with switch firmware 1.0.70 reported
-ready, then failed its first PHY 0 identity read (`CMD 1801`, error -19).
-PHYLIB skipped PHY 0 and `mxl_lan0` was never created. Same-boot diagnostic
-reads later returned ID `0xc1335528` without a reset or PHY register write;
-the bus recorded 22 successful reads, one error and zero writes for PHY 0.
-This establishes a transient discovery failure, not its internal firmware or
-transport cause, and is not evidence that the fix has passed on hardware.
+The local `987-mxl862xx-retry-initial-phy-id.patch` is separate from the
+byte-identical 930/931 import. Both R4-Pro SKUs carry it: the 8X as a board
+patch, the 4E through prepare's explicit import of this one file, which is part
+of the 4E preparation fingerprint. `test-4e-platform.sh` requires every 8X-local
+patch to the MxL driver to reach the 4E unchanged.
+
+Switch firmware can report ready before the first PHY identity read succeeds.
+If PHYLIB skips that PHY, its network port is absent for the rest of the boot.
+The retry is limited to initial discovery and does not reset the switch.
 
 The correction retries only C22 identity reads during initial registration:
 three attempts with 100ms between attempts, preserving the existing per-command
@@ -59,6 +59,7 @@ bus and must fail
 against the unpatched import. It also executes the command/API wrapper for
 host and firmware CRC6/CRC16 failures with both pending and completed shutdown
 workers, checking error propagation and the unchanged shutdown notification.
-New-image 8X cold/warm boot tests must still prove all four base ports appear,
-followed by port/link/forwarding checks.
+New-image cold/warm boot tests on each SKU must still prove all four base ports
+appear, followed by port/link/forwarding checks. A boot that logs the `CMD 1801`
+error and still registers `mxl_lan0` is the direct evidence that the retry ran.
 No startup-service rebuild or switch firmware update is part of this fix.

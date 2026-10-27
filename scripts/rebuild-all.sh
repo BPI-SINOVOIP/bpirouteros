@@ -254,7 +254,7 @@ for ((i = 0; i < ${#BOARDS[@]}; i++)); do
                 *" ${BOARDS[$i]} "*)
                     board_init "${BOARDS[$i]}"
                     if [ "$MODE" != development ] || [ "$BOARD_IMPLEMENTED" != yes ]; then
-                        echo "board ${BOARDS[$i]} has a frozen identity; 22-D step 6 permits source-complete development builds only" >&2
+                        echo "board ${BOARDS[$i]} has a frozen identity; this board requires source-complete development builds" >&2
                         exit 2
                     fi ;;
                 *) echo "unknown board: ${BOARDS[$i]}" >&2; exit 2 ;;

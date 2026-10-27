@@ -1,0 +1,31 @@
+diff --git a/net/mwan3/files/etc/hotplug.d/iface/15-mwan3 b/net/mwan3/files/etc/hotplug.d/iface/15-mwan3
+--- a/net/mwan3/files/etc/hotplug.d/iface/15-mwan3
++++ b/net/mwan3/files/etc/hotplug.d/iface/15-mwan3
+@@ -18,6 +18,27 @@ if { [ "$ACTION" = "ifup" ] || [ "$ACTION" = "connected" ] ; } && [ -z "$DEVICE"
+ 	exit 3
+ fi
+ 
++# netifd publishes a qmi/ncm session's address on the dynamic <iface>_4/_6
++# child, often after the parent's own ifup. mwan3 resolves that child only
++# when the parent comes up and has no section for the child, so a late child
++# leaves tracking disabled. Replay the parent once its child is up.
++if [ "$ACTION" = "ifup" ] && [ "$MWAN3_STARTUP" != "init" ]; then
++	case "$INTERFACE" in
++	*_4|*_6)
++		config_load mwan3
++		parent=${INTERFACE%_*}
++		config_get_bool parent_enabled "$parent" enabled 0
++		config_get parent_family "$parent" family ipv4
++		config_get child_type "$INTERFACE" TYPE
++		if [ "$parent_enabled" -eq 1 ] && [ -z "$child_type" ] &&
++			[ "ipv${INTERFACE##*_}" = "$parent_family" ]; then
++			LOG notice "Replaying ifup of $parent for its dynamic child $INTERFACE"
++			exec /usr/sbin/mwan3 ifup "$parent"
++		fi
++		;;
++	esac
++fi
++
+ [ "$MWAN3_STARTUP" = "init" ] || procd_lock
+ 
+ mwan3_init

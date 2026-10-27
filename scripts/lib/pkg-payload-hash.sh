@@ -1,12 +1,8 @@
 #!/bin/sh
 # pkg-payload-hash.sh — hash what a package DELIVERS, not the file it arrives in.
 #
-# Why this exists: rebuild-all recorded only the .apk's own sha256, and that
-# hash changes on every repack even when the payload is byte-identical. Measured
-# on a six-board run where all six boards built from one source tree: the Go
-# binary inside was the same 32 bytes of hash every time, and no two .apk hashes
-# matched. So the column meant to answer "is this the same software?" answered
-# "no" six times in a row, for six identical builds.
+# Container hashes can change on repack without a payload change.
+# Compare extracted payloads independently of container metadata.
 #
 # The payload hash is over a canonical listing of the extracted tree:
 #

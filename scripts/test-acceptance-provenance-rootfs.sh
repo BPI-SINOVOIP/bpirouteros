@@ -7,7 +7,7 @@ trap 'rm -rf "$TMP"' EXIT
 ROOT=$TMP/root
 FEED=$TMP/feed
 mkdir -p "$ROOT/etc" "$ROOT/usr/bin" "$ROOT/www/bpirouter/assets" \
-    "$ROOT/usr/share/bpirouter/gcom" "$ROOT/usr/share/bpirouter/acceptance/lib" \
+    "$ROOT/usr/share/bpirouter/gcom" \
     "$ROOT/usr/libexec" "$ROOT/etc/init.d" "$ROOT/etc/uci-defaults" "$FEED"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -32,12 +32,6 @@ EOF
 printf '<html>formal UI</html>\n' >"$ROOT/www/bpirouter/index.html"
 printf 'formal chunk\n' >"$ROOT/www/bpirouter/assets/app.js"
 printf 'gcom script\n' >"$ROOT/usr/share/bpirouter/gcom/connect.gcom"
-for runner in cell qos seg tel; do
-    printf '%s acceptance runner\n' "$runner" >"$ROOT/usr/share/bpirouter/acceptance/$runner-acceptance.sh"
-    chmod 755 "$ROOT/usr/share/bpirouter/acceptance/$runner-acceptance.sh"
-done
-printf 'acceptance common\n' >"$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
-chmod 755 "$ROOT/usr/share/bpirouter/acceptance/lib/acceptance-common.sh"
 printf 'OTA restore helper\n' >"$ROOT/usr/libexec/bpirouter-ota-restore"
 printf 'OTA restore init\n' >"$ROOT/etc/init.d/bpirouter-ota-restore"
 printf 'product setup defaults\n' >"$ROOT/etc/uci-defaults/99-bpirouter-setup"
@@ -57,10 +51,6 @@ file_row() {
     file_row F 644 /www/bpirouter/index.html
     file_row F 644 /www/bpirouter/assets/app.js
     file_row F 644 /usr/share/bpirouter/gcom/connect.gcom
-    for runner in cell qos seg tel; do
-        file_row F 755 "/usr/share/bpirouter/acceptance/$runner-acceptance.sh"
-    done
-    file_row F 755 /usr/share/bpirouter/acceptance/lib/acceptance-common.sh
     file_row B 755 /etc/uci-defaults/99-bpirouter-setup
 } | LC_ALL=C sort >"$FEED/.payload-inventory"
 cp "$FEED/.payload-inventory" "$ROOT/etc/bpirouter-product-payload.manifest"
@@ -74,6 +64,33 @@ EOF
 "$SCRIPT_DIR/check-acceptance-provenance-rootfs.sh" "$ROOT" --ui-proof "$TMP/proof.json" >/dev/null
 "$SCRIPT_DIR/check-acceptance-provenance-rootfs.sh" "$ROOT" --feed-files "$FEED" >/dev/null
 echo "ok: matching rootfs accepted through proof and feed boundaries"
+
+# Acceptance tools are delivered beside the image. An image that still carries
+# them is refused even when every hash binding its inventory to the build agrees.
+TOOLS_ROOT=$TMP/tools-root
+TOOLS_FEED=$TMP/tools-feed
+rm -rf "$TOOLS_ROOT" "$TOOLS_FEED"
+cp -a "$ROOT" "$TOOLS_ROOT"
+cp -a "$FEED" "$TOOLS_FEED"
+mkdir -p "$TOOLS_ROOT/usr/share/bpirouter/acceptance"
+printf 'acceptance runner\n' >"$TOOLS_ROOT/usr/share/bpirouter/acceptance/cell-acceptance.sh"
+chmod 755 "$TOOLS_ROOT/usr/share/bpirouter/acceptance/cell-acceptance.sh"
+{
+    cat "$ROOT/etc/bpirouter-product-payload.manifest"
+    printf 'F|755|%s|%s|%s\n' \
+        "$(wc -c <"$TOOLS_ROOT/usr/share/bpirouter/acceptance/cell-acceptance.sh" | tr -d ' ')" \
+        "$(sha256sum "$TOOLS_ROOT/usr/share/bpirouter/acceptance/cell-acceptance.sh" | awk '{print $1}')" \
+        /usr/share/bpirouter/acceptance/cell-acceptance.sh
+} | LC_ALL=C sort >"$TOOLS_FEED/.payload-inventory"
+cp "$TOOLS_FEED/.payload-inventory" "$TOOLS_ROOT/etc/bpirouter-product-payload.manifest"
+tools_inventory=$(sha256sum "$TOOLS_FEED/.payload-inventory" | awk '{print $1}')
+printf 'src %s\nart %s\ninventory %s\n' "$src" "$art" "$tools_inventory" >"$TOOLS_FEED/.manifest"
+cp "$TOOLS_FEED/.manifest" "$TOOLS_ROOT/etc/bpirouter-ui-build.manifest"
+expect_fail "release image carrying acceptance tools" \
+    "$SCRIPT_DIR/check-acceptance-provenance-rootfs.sh" "$TOOLS_ROOT" --feed-files "$TOOLS_FEED"
+grep -Fq "payload inventory carries formal acceptance tools" "$TMP/negative.log" \
+    || { cat "$TMP/negative.log" >&2; fail "acceptance tools in the image were refused for the wrong reason"; }
+
 
 mv "$FEED/.manifest" "$TMP/feed-manifest.real"
 ln -s "$TMP/feed-manifest.real" "$FEED/.manifest"

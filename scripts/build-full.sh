@@ -149,17 +149,17 @@ bpir_select_release_boards "${BOUND_RELEASE:-${PUBLIC_RELEASE:-}}"
 board_init "$BOARD"
 
 # A board whose identity is frozen but whose implementation is not cannot produce
-# this output. Refuse by name so the message points at the missing 22-D work
+# this output. Refuse by name so the message points at the missing build prerequisites
 # instead of surfacing later as an absent config or an empty file contract.
 [ "$BOARD_IMPLEMENTED" = yes ] || {
     echo -e "${R}✗ board $BOARD has a frozen identity without build admission yet${N}" >&2
-    echo -e "${R}  see RELEASE-v1.5-EXECUTION-PLAN 22-D step 6${N}" >&2
+    echo -e "${R}  board configuration and provisioning support must be complete before building${N}" >&2
     exit 1
 }
 case " $PLANNED_BOARDS " in
     *" $BOARD "*)
         [ "$DEVELOPMENT_BOUND" = 1 ] || {
-            echo "board $BOARD has a frozen identity; 22-D step 6 requires a development-bound prepare" >&2
+            echo "board $BOARD has a frozen identity; this board requires a development-bound prepare" >&2
             exit 1
         } ;;
 esac
@@ -311,6 +311,7 @@ BPIR_FEEDS_DIR="$FEEDS_DIR" \
 BPIR_MWAN3_STOCK="$WORK_DIR/feeds/packages/net/mwan3/files/etc/config/mwan3" \
     "$SCRIPT_DIR/test-mwan3-canonical.sh"
 "$SCRIPT_DIR/test-mwan3-route-delete-order.sh"
+"$SCRIPT_DIR/test-mwan3-dynamic-child.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-sqm-canonical.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-offload-disabled.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-owned-configs.sh"
@@ -320,7 +321,7 @@ BPIR_FEEDS_DIR="$FEEDS_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-owned-config
 "$SCRIPT_DIR/test-netifd-proto-busy.sh"
 "$SCRIPT_DIR/test-kernel-patch-routing.sh"
 "$SCRIPT_DIR/test-as21xxx-reprobe.sh"
-if [ "$BOARD" = bpi-r4-pro ]; then
+if [ "$BOARD" = bpi-r4-pro ] || [ "$BOARD" = bpi-r4-pro-4e ]; then
     bash "$SCRIPT_DIR/test-mxl862xx-phy-discovery.sh"
 fi
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-factory-reset-rootfs.sh"
@@ -355,7 +356,18 @@ if [ "$BOARD" = bpi-r4-pro-4e ]; then
 fi
 if [ "$UI_MODE" != none ]; then
 	bash "$SCRIPT_DIR/test-sqm-lifecycle-owner.sh" --rootfs "$ASSEMBLED_ROOT"
-	"$SCRIPT_DIR/check-rootfs-integrity.sh" "$ASSEMBLED_ROOT"
+	# Formal acceptance tools run on this rootfs but are delivered beside it.
+	# A source build has them, so scan them against this image's commands too.
+	ROOTFS_GATE_ARGS=()
+	if [ "$UI_MODE" = source ]; then
+		ACCEPTANCE_BUNDLE="$WORK_DIR/tmp/bpirouter-acceptance-bundle"
+		rm -rf "$ACCEPTANCE_BUNDLE"
+		mkdir -p "$WORK_DIR/tmp"
+		"$UI_SRC/scripts/acceptance-bundle.sh" --output "$ACCEPTANCE_BUNDLE" >/dev/null
+		ROOTFS_GATE_ARGS=(--acceptance-tools "$ACCEPTANCE_BUNDLE")
+	fi
+	"$SCRIPT_DIR/check-rootfs-integrity.sh" "$ASSEMBLED_ROOT" "${ROOTFS_GATE_ARGS[@]}"
+	[ "$UI_MODE" != source ] || rm -rf "$ACCEPTANCE_BUNDLE"
 	"$SCRIPT_DIR/check-factory-reset-rootfs.sh" "$ASSEMBLED_ROOT"
     if [ "$RELEASE_BOUND" = 1 ]; then
         "$SCRIPT_DIR/check-acceptance-provenance-rootfs.sh" \

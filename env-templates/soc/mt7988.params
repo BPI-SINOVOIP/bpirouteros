@@ -1,4 +1,4 @@
-# mt7988 (R4 / R4-poe) per-SoC env constants (FIRMWARE_ROLLBACK §10.6.3).
+# mt7988 (R4 / R4-poe) per-SoC env constants.
 # Sourced by boards/<board>.params via SOC_ENV. Values with $loadaddr / && MUST be
 # single-quoted so bash keeps them literal (they are u-boot env text, not shell).
 LOADADDR=0x50000000

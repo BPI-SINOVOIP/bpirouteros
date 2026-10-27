@@ -1,4 +1,4 @@
-# bpi-r4 u-boot defenv params (FIRMWARE_ROLLBACK.md §10.6).
+# bpi-r4 u-boot defenv params.
 # Board-agnostic templates in ../media/*.env.in reference @DTBBASE@/@IMGPREFIX@;
 # gen-defenv.sh substitutes these to produce the per-board defenv. A new board =
 # a new <board>.params here (+ vendored pristine), no template edits.

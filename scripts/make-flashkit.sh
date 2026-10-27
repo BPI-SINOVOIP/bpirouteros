@@ -94,14 +94,17 @@ echo "  + mtk_uartboot (vendored, linux-x86_64) + source + AGPL-3.0 text"
 
 # Published trees carry the exported guides; private builds use their sole
 # maintained source in the UI repository. Never ship internal repair records.
-GUIDES="$BUILD_DIR"
-if [ ! -f "$GUIDES/INSTALLATION.md" ]; then
-    GUIDES="$(dirname "$BUILD_DIR")/bpirouter-ui/docs/user"
+if [ -f "$BUILD_DIR/INSTALLATION.md" ]; then
+    for guide in FEATURES.md FEATURES.zh-CN.md INSTALLATION.md INSTALLATION.zh-CN.md; do
+        [ -f "$BUILD_DIR/$guide" ] || fail "missing user guide: $guide"
+        cp "$BUILD_DIR/$guide" "$OUT/"
+    done
+else
+    UI_REPO="$(dirname "$BUILD_DIR")/bpirouter-ui"
+    UI_DOC_REV=$(git -C "$UI_REPO" rev-parse HEAD) || fail "cannot identify user guide revision"
+    source "$SCRIPT_DIR/lib/user-guides.sh"
+    bpir_export_user_guides "$UI_REPO" "$UI_DOC_REV" "$OUT" || fail "cannot export committed user guides"
 fi
-for guide in FEATURES.md FEATURES.zh-CN.md INSTALLATION.md INSTALLATION.zh-CN.md; do
-    [ -f "$GUIDES/$guide" ] || fail "missing user guide: $GUIDES/$guide"
-    cp "$GUIDES/$guide" "$OUT/"
-done
 case "$BOARD" in
     bpi-r3-mini) RUNBOOK=RUNBOOK-r3mini.md ;;
     openwrt-one) RUNBOOK=RUNBOOK-openwrt-one.md ;;

@@ -1,4 +1,4 @@
-# env-templates — u-boot defenv as board-agnostic templates (§10.6)
+# env-templates — u-boot defenv as board-agnostic templates
 
 One logic, one template; each board supplies parameters. This replaces the
 hand-maintained per-board defenv patch hunks with generated patches.
@@ -13,7 +13,7 @@ hand-maintained per-board defenv patch hunks with generated patches.
 - `soc/<soc>.params` — per-SoC env constants shared by all boards of that SoC
   (`LOADADDR`, `BOOTARGS_BASE`, `UBOOTENV_VOL`, `SNAND_WRITE_BL2`,
   `RESET_FACTORY_SNAND`). Values containing `$loadaddr`/`&&` are single-quoted
-  (u-boot env text, not shell). mt7988/7987/7986 each have a set (§10.6.3).
+  (u-boot env text, not shell). mt7988/7987/7986 each have a set.
 - `pristine/<DEFENV_BASE>_<medium>_env` — the OpenWrt-pristine defenv, i.e. the
   file as created by `uboot-mediatek/patches/450-add-bpi-r4.patch`. Used only as
   the diff base when generating the replacement patch. **Re-vendor if the u-boot
@@ -36,8 +36,7 @@ git add env-templates patches/bpi-r4/uboot/z06-*.patch
 
 ## Invariant
 For an onboarded board, `gen-defenv.sh` output applied onto `pristine/` must equal
-the previously-shipped defenv byte-for-byte. R4 was validated this way against the
-old `z01`(defenv hunks)`+z04+z05` result (all three media identical).
+the maintained defenv patches byte-for-byte for each supported medium.
 
 ## What folded in here
 - `z01` keeps only its 3 defconfig hunks (BOOTDELAY/AUTOBOOT); its defenv rewrites

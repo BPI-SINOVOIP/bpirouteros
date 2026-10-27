@@ -1,0 +1,87 @@
+arm64: dts: mediatek: describe R4-Pro 8X copper combo LEDs
+
+CM15/CM16/CM17 route AS21010 LED0 and LED1 through NMOS sinks to the
+green and yellow jack LEDs. The PHY outputs are active high. Firmware
+leaves both events off; expose them to the existing PHY LED driver.
+Disable each pair in its SFP overlay so netdev triggers cannot reflect
+SFP traffic on the unused copper jack.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x.dts
+@@ -420,2 +420,48 @@
++&phy_10g_lan {
++	leds {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		combo_lan_green: led@0 {
++			reg = <0>;
++			color = <LED_COLOR_ID_GREEN>;
++			function = LED_FUNCTION_LAN;
++			active-high;
++			linux,default-trigger = "netdev";
++		};
++
++		combo_lan_yellow: led@1 {
++			reg = <1>;
++			color = <LED_COLOR_ID_YELLOW>;
++			function = LED_FUNCTION_LAN;
++			active-high;
++			linux,default-trigger = "netdev";
++		};
++	};
++};
++
++&phy_10g_wan {
++	leds {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		combo_wan_green: led@0 {
++			reg = <0>;
++			color = <LED_COLOR_ID_GREEN>;
++			function = LED_FUNCTION_WAN;
++			active-high;
++			linux,default-trigger = "netdev";
++		};
++
++		combo_wan_yellow: led@1 {
++			reg = <1>;
++			color = <LED_COLOR_ID_YELLOW>;
++			function = LED_FUNCTION_WAN;
++			active-high;
++			linux,default-trigger = "netdev";
++		};
++	};
++};
++
+ &gmac2 {
+ 	phy-mode = "10gbase-r";
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-lan-sfp.dtso
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-lan-sfp.dtso
+@@ -35,3 +35,11 @@
+ &lan_combo_sfp_hog {
+ 	status = "okay";
+ };
++
++&combo_lan_green {
++	status = "disabled";
++};
++
++&combo_lan_yellow {
++	status = "disabled";
++};
+--- a/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp.dtso
++++ b/arch/arm64/boot/dts/mediatek/mt7988a-bananapi-bpi-r4-pro-8x-wan-sfp.dtso
+@@ -35,3 +35,11 @@
+ &wan_combo_sfp_hog {
+ 	status = "okay";
+ };
++
++&combo_wan_green {
++	status = "disabled";
++};
++
++&combo_wan_yellow {
++	status = "disabled";
++};

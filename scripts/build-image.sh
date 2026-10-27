@@ -37,11 +37,11 @@ step() { echo -e "${C}▸ $1${N}"; }
 ok()   { echo -e "${G}✓ $1${N}"; }
 # quick_warn: quick mode injects files via FILES= and skips the bpirouter-ui
 # apk, so it omits parts that --release ships — the image must NOT be delivered
-# or used for §11 acceptance. Printed at both the start and the end of a quick
+# or used for release acceptance. Printed at both the start and the end of a quick
 # build so it can't scroll past unseen.
 quick_warn() {
     echo -e "${R}╔══════════════════════════════════════════════════════════════════╗${N}"
-    echo -e "${R}║  QUICK BUILD — DEV / SELF-TEST ONLY · NOT FOR DELIVERY OR §11     ║${N}"
+    echo -e "${R}║  QUICK BUILD — DEV / SELF-TEST ONLY · NOT FOR DELIVERY OR RELEASE ACCEPTANCE     ║${N}"
     echo -e "${R}╚══════════════════════════════════════════════════════════════════╝${N}"
     echo -e "${Y}  The FILES= overlay omits files that --release ships via apk:${N}"
     echo -e "${Y}    · bpirouter-bootok          (A/B boot-health bootcount/altcount clear)${N}"
@@ -66,17 +66,17 @@ source "$SCRIPT_DIR/boards.sh"
 board_init "$BOARD"
 
 # A board whose identity is frozen but whose implementation is not cannot produce
-# this output. Refuse by name so the message points at the missing 22-D work
+# this output. Refuse by name so the message points at the missing build prerequisites
 # instead of surfacing later as an absent config or an empty file contract.
 [ "$BOARD_IMPLEMENTED" = yes ] || {
     echo -e "${R}✗ board $BOARD has a frozen identity without build admission yet${N}" >&2
-    echo -e "${R}  see RELEASE-v1.5-EXECUTION-PLAN 22-D step 6${N}" >&2
+    echo -e "${R}  board configuration and provisioning support must be complete before building${N}" >&2
     exit 1
 }
 
 case " $PLANNED_BOARDS " in
     *" $BOARD "*)
-        echo "board $BOARD has a frozen identity; 22-D step 6 uses development build-full, not ImageBuilder" >&2
+        echo "board $BOARD has a frozen identity; use development build-full, not ImageBuilder" >&2
         exit 1 ;;
 esac
 
@@ -86,13 +86,14 @@ esac
 # not part of either bpirouter apk.
 "$SCRIPT_DIR/check-prepared.sh" "$BOARD"
 
-# QMF-15 is a source/payload contract, not a runtime best-effort migration.
+# Canonical configuration is a source/payload contract, not a runtime best-effort migration.
 # Fail before assembling either quick or release images if a canonicalizer, a
 # strict reader, or the six-board package selection has drifted.
 BPIR_FEEDS_DIR="$FEEDS_DIR" \
 BPIR_MWAN3_STOCK="$WORK_DIR/feeds/packages/net/mwan3/files/etc/config/mwan3" \
     "$SCRIPT_DIR/test-mwan3-canonical.sh"
 "$SCRIPT_DIR/test-mwan3-route-delete-order.sh"
+"$SCRIPT_DIR/test-mwan3-dynamic-child.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-sqm-canonical.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-offload-disabled.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-owned-configs.sh"
@@ -155,10 +156,17 @@ fi
 if [ "$MODE" != "release" ]; then
     step "Building Go API (arm64)..."
     cd "$UI_DIR/backend"
+    # go.mod's toolchain line is only a minimum under GOTOOLCHAIN=auto; select
+    # it exactly and check the compiler the binary records.
+    GO_TOOLCHAIN=$(sed -n 's/^toolchain //p' go.mod)
+    [ -n "$GO_TOOLCHAIN" ] || { echo -e "${R}bpirouter-ui backend/go.mod has no toolchain line${N}"; exit 1; }
+    export GOTOOLCHAIN="$GO_TOOLCHAIN"
     [ ! -f go.sum ] && go mod tidy
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
         -ldflags="-s -w" -o /tmp/bpirouter-apid ./cmd/apid/
-    ok "Go binary"
+    APID_GO=$(go version /tmp/bpirouter-apid | awk '{print $2}')
+    [ "$APID_GO" = "$GO_TOOLCHAIN" ] || { echo -e "${R}apid was built with $APID_GO, expected $GO_TOOLCHAIN${N}"; exit 1; }
+    ok "Go binary ($APID_GO)"
 
     step "Building Vue frontend..."
     cd "$UI_DIR/frontend"
@@ -327,7 +335,21 @@ if [ "${#IB_ROOTS[@]}" -ne 1 ]; then
     exit 1
 fi
 "$SCRIPT_DIR/test-netifd-proto-busy.sh" --rootfs "${IB_ROOTS[0]}"
-"$SCRIPT_DIR/check-rootfs-integrity.sh" "${IB_ROOTS[0]}"
+# Formal acceptance tools run on this rootfs but are delivered beside it, so
+# scan the bundle from the sibling UI checkout against this image's commands.
+# A published tree has no UI source; formal acceptance builds come from
+# build-full.sh in source mode, which always performs this scan.
+if [ -x "$UI_DIR/scripts/acceptance-bundle.sh" ]; then
+    ACCEPTANCE_BUNDLE="$IB_DIR/tmp/bpirouter-acceptance-bundle"
+    rm -rf "$ACCEPTANCE_BUNDLE"
+    mkdir -p "$IB_DIR/tmp"
+    "$UI_DIR/scripts/acceptance-bundle.sh" --output "$ACCEPTANCE_BUNDLE" >/dev/null
+    "$SCRIPT_DIR/check-rootfs-integrity.sh" "${IB_ROOTS[0]}" --acceptance-tools "$ACCEPTANCE_BUNDLE"
+    rm -rf "$ACCEPTANCE_BUNDLE"
+else
+    echo "SKIP: no UI source at $UI_DIR; acceptance tool commands not scanned against this rootfs"
+    "$SCRIPT_DIR/check-rootfs-integrity.sh" "${IB_ROOTS[0]}"
+fi
 "$SCRIPT_DIR/check-factory-reset-rootfs.sh" "${IB_ROOTS[0]}"
 if [ "$MODE" = release ]; then
     "$SCRIPT_DIR/check-acceptance-provenance-rootfs.sh" "${IB_ROOTS[0]}" \
