@@ -10,4 +10,4 @@ MEDIA="spi-nand"                                      # the single NAND medium
 IMGPREFIX=openwrt-mediatek-filogic-openwrt_one        # bootfile prefix (underscore form)
 BOOTLED_PWR=white                                     # u-boot LED label for power/boot indicator
 BOOTLED_REC=green                                     # u-boot LED label for recovery indicator
-OVERLAY_SIZE=0x5000000                                # per-slot rootfs_data overlay size (80MB; two slots + 2 fits fit in 256MB NAND)
+OVERLAY_SIZE=0x3000000                                # per-slot overlay: 48 MiB, paired with two 64 MiB FIT volumes

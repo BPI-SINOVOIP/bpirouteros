@@ -1,8 +1,9 @@
-# BpiRouter v1.5: features and use
+# BpiRouter v1.6: features and use
 
 [Chinese](FEATURES.zh-CN.md) · [Installation guide](INSTALLATION.md)
 
-This guide describes the v1.5 series. Versions with an `rc` suffix are release
+This guide describes the v1.6 series for home users. Check your installed version;
+these instructions do not describe v1.5. Versions with an `rc` suffix are release
 candidates for testing before the final release. Keep a backup and a way to
 reinstall before using it on a network
 you depend on. Available ports, Wi-Fi bands and mobile connections depend on
@@ -45,7 +46,7 @@ assume which release is installed.
 | Network | Configure Internet connections, LAN addressing, Wi-Fi, mobile modules, USB sharing, Multi-WAN and WAN bandwidth shaping. |
 | Devices | Identify connected devices, give them names, and allow or block their access. |
 | Segments | Set up separate Guest and IoT Wi-Fi networks, their access rules and shared bandwidth limits. |
-| Advanced | Configure DNS filtering, access schedules, port forwarding, firewall rules, VPN and dynamic DNS; use network diagnostics. |
+| Advanced | Configure remote networking, DNS filtering, access schedules, port forwarding, firewall rules, VPN and dynamic DNS; use network diagnostics. |
 | System | Change the router name, time and password; back up or restore settings, manage firmware, reboot or reset the router. |
 | Users | Manage administrator, operator and read-only accounts. Administrator access is required. |
 
@@ -79,6 +80,24 @@ failover or load balancing. Failover uses an alternative connection when the
 preferred one fails. Load balancing shares connections across multiple lines;
 it does not promise the sum of their speeds for a single download.
 
+Multi-WAN switching applies to IPv4 only. IPv6 remains available where supported,
+but does not follow these failover rules.
+
+This version supports at most eight Multi-WAN interfaces; disabled entries also
+count. Keeping settings during an upgrade or restoring an older backup can bring
+in more entries and prevent Multi-WAN from starting. This also applies to OpenWrt
+One after reinstallation and backup restore.
+
+If the page reports this limit, an administrator can use **Reset Multi-WAN and
+reboot** from the local network. This deletes Multi-WAN members, policies and
+health checks, then restarts the router. WAN addresses, connection credentials
+and other settings are retained; recreate the required Multi-WAN policy afterward.
+During a firmware trial, reset is unavailable. Returning to the previous firmware
+also returns to its settings, without guaranteeing immediate connectivity.
+Keeping the new firmware ends the trial's automatic rollback protection but does
+not fix Multi-WAN: reset still requires a separate confirmation and restart.
+Once kept, that trial's rollback option is no longer available.
+
 ### Bandwidth controls
 
 - **Network → WAN bandwidth shaping:** optionally enable SQM for each WAN and
@@ -104,6 +123,88 @@ In **Devices**, use Allow or Block to change a device's access. A device name or
 address is a management aid, not proof of who is using it. Access schedules and
 DNS filtering are available in **Advanced**; DNS filtering cannot block every
 application or every way of reaching a website.
+
+### Remote networking with Tailscale
+
+In **Advanced → Remote access → Remote networking**, an administrator can link
+home networks through the official Tailscale service, including on OpenWrt One.
+Remote networking, local-network sharing and remote web management are off by
+default. Joining an account does not open access by itself.
+
+1. For two routers, give their LANs different address ranges before connecting
+   them. Both default to `192.168.100.0/24`. Choose a range that does not overlap
+   either site's LAN, Guest, IoT or upstream networks. For example, if
+   `192.168.110.0/24` is unused, edit one router's LAN settings: enter
+   `192.168.110.1` as the IP address and `255.255.255.0` as the subnet mask.
+   After saving, let your computer obtain an address in the new network,
+   reconnect at `https://192.168.110.1`, sign in and keep the settings using
+   the confirmation banner before the trial expires.
+2. Enable remote networking, choose **Try these settings**, check that local
+   access still works, and keep the configuration using the confirmation banner.
+3. Get the sign-in link and complete sign-in with your Tailscale account. Join
+   both routers to the same Tailscale network. Keep sign-in links private.
+4. Select each local network you want to share: LAN, Guest or IoT. Keep this
+   configuration trial, then use the linked Tailscale console to approve those
+   subnet routes and review access permissions. If device approval is requested,
+   complete that separately. Check the router's key-expiry setting there; disable
+   expiry for a router that must stay connected, and remove it if no longer trusted.
+5. To connect a phone or computer from outside, install its Tailscale client,
+   join the same network and enable subnet-route access if the client requires
+   it. Open a service using the shared device's IPv4 address. Devices behind the
+   two routers do not need a Tailscale app. Both uses can operate together.
+   This release has not been verified with the Windows or macOS Tailscale
+   clients; their subnet-route settings and system firewalls may differ.
+
+Only selected networks behind BpiRouter are shared. Sharing works in both
+directions: devices on a shared network, including Guest or IoT, can also start
+connections to the other site's shared networks and to devices in your Tailscale
+network, as far as the other side's settings and your Tailscale access policy
+allow. Devices and management pages on its upstream network are not exposed
+through this connection. Remote web
+management is a separate option: it allows the BpiRouter page and LuCI, still
+with their normal sign-in requirements. It does not enable remote SSH or other
+router services. Removing sharing or management permission disconnects affected
+remote access; keep a local way to manage the router.
+
+The page separates the running service, local permissions and observed route
+approval. Devices reached this way normally use BpiRouter as their default
+gateway. A device that uses another gateway or several network interfaces needs
+a route back to the remote networks, and its own firewall must accept those
+connections. An installed or approved route does not prove that a remote device
+or its application is reachable. Unknown or stale information is not a current
+approval or a clean conflict check. Check the Tailscale console and the target
+service when access fails. The page does not report a verified direct/relay path;
+connections may use either, and performance depends on the available path.
+
+The page shows the reported node-key expiry date in your browser's local time.
+An unavailable date is shown as unknown. There is no advance expiry reminder;
+if the key is reported expired, an error asks you to reauthorize the device.
+If the router restarts after the key has expired, the page may show only that
+sign-in is required, without the expiry error. You can still get the sign-in
+link and sign in again, then check the device and route approvals in the
+Tailscale console.
+
+A network shared by one site must not overlap any LAN, Guest or IoT network at
+the other site, whether or not the other site shares it. Guest and IoT use the
+same default ranges on every BpiRouter, so change one site's range before
+sharing them. Overlaps are reported but are not automatically fixed or blocked;
+they can stop local devices from reaching the Internet or the management page.
+To recover, on the affected router disable remote networking or revoke the
+conflicting route approval in the Tailscale console; on the sharing router,
+stop sharing that network. Then change the range.
+
+When an accepted remote LAN overlaps your local upstream network, traffic routed
+by BpiRouter can go to the remote network instead.
+To reach the local upstream device, connect directly to that upstream network;
+if the client itself runs Tailscale, disconnect it or stop accepting subnet routes
+there as needed. The router cannot see every network used by remote clients.
+
+This feature shares IPv4 local networks by IP address; it does not configure remote
+DNS or MagicDNS, or offer an exit-node option for sending all Internet traffic
+through another router. Normal Internet access stays local in this supported setup. Extra routes
+you approve on other nodes can change that behavior; BpiRouter does not filter
+all such routes by address range or IP version. IPv6 subnet sharing and additional
+public-address routes are outside this version's supported setup.
 
 ### VPN, dynamic DNS and advanced connections
 
@@ -131,10 +232,32 @@ may contain passwords and keys: store them privately and do not send them with
 a support request. Firmware updates, settings restore and factory reset are
 administrator operations. A factory reset removes your settings.
 
-For v1.5, install from the matching installation media rather than upgrading
-an older or another vendor's firmware in place. Follow the
-[installation guide](INSTALLATION.md); an upgrade image is not initial
-installation media.
+Restoring a backup to a replacement router also restores any WAN MAC address
+saved in that backup. Disconnect the old router before restoring: connecting
+both routers to the same upstream network with the same WAN MAC can disrupt
+connectivity. If you need to keep both routers in use on that network, configure
+the new router separately instead of restoring the other router's full settings
+backup. Restoring settings does not automatically assign a new WAN MAC address.
+
+Remote-network identity is not included in a downloaded settings backup. A
+replacement router must sign in separately; restoring to an already bound router
+keeps that router's identity while applying the restored settings. Disabling
+remote networking keeps the identity. **Unlink this router** disables remote
+networking and removes the identity in use, but it does not remove every
+identity copy kept on the router or delete the cloud device record. Before
+handing over or retiring the router, perform a factory reset and delete the
+device in the Tailscale console.
+
+Keeping settings during an update preserves the current firmware's identity, if
+it has one. If you return to older firmware without that identity and then update
+again, sign-in is required again. Review route approval and remove obsolete cloud
+devices as needed. Rolling back a settings trial does not undo account sign-in
+or cloud approvals.
+
+Follow the [installation guide](INSTALLATION.md) for v1.5-to-v1.6 migration.
+OpenWrt One requires a complete reinstall using the new flashkit's serial loader;
+neither an in-place update nor the old reset-button USB restore can migrate it.
+Back up settings first. An upgrade image is not initial installation media.
 
 After a firmware update, allow several minutes for startup and any automatic
 restart to complete. Keep the power connected during this process. If the web

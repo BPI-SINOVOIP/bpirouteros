@@ -47,6 +47,7 @@ Board U-Boot directories:
 | [R4-Lite `z05-*`, `z07-*`](patches/bpi-r4-lite/uboot/) | R4-Lite | Initialize its system LED and stabilize provisioning writes by using 48 MHz eMMC high-speed mode instead of HS200/HS400. | Local |
 | [R3-Mini `z08-*`](patches/bpi-r3-mini/uboot/) | R3-Mini | Keep the NAND provisioning environment independent of saved user environment. | Local |
 | [One `z07-*`, `z08-*`](patches/openwrt-one/uboot/) | OpenWrt One | Add the RAM provisioning U-Boot variant and correct the orange LED label. | Local |
+| [One `z09-*`, `z10-*`](patches/openwrt-one/uboot/) | OpenWrt One | Use the NOR U-Boot as a button-gated USB-to-NAND installer for the flashkit's factory image, and stop the installers when an actual NAND erase operation fails. | Local |
 | [8X `450-*`](patches/bpi-r4-pro/uboot/), [4E `450-*`](patches/bpi-r4-pro-4e/uboot/) | R4-Pro 8X/4E | Add board device trees, build configurations and media variants. | Reference-derived; MediaTek notices retained |
 | [8X `z12-*`](patches/bpi-r4-pro/uboot/), [4E `z12-*`](patches/bpi-r4-pro-4e/uboot/) | R4-Pro 8X/4E | Initialize system LEDs through the I2C GPIO expander. | Local |
 | [8X `z13-*`, `z14-*`](patches/bpi-r4-pro/uboot/) | R4-Pro 8X | Reset both firmware-loaded 10G PHYs on boot and enable combo-media preboot selection. | Local |
@@ -63,7 +64,8 @@ Image-layout and installation integration:
 |---|---|---|---|
 | [Common base-files `001-*`](patches/common/base-files/) | Shared Filogic images | Adjust image construction for the product's installation layout. | Local |
 | [R3-Mini base-files `011-*`, `012-*`](patches/bpi-r3-mini/base-files/) | R3-Mini | Build A/B eMMC provisioning content in NAND media and omit an unused recovery initramfs image. | Local |
-| [One base-files `011-*`, `012-*`, `013-*`](patches/openwrt-one/base-files/) | OpenWrt One | Build dual UBI firmware volumes, wire in RAM provisioning U-Boot, and reserve firmware-volume headroom for upgrades. | Local |
+| [One base-files `011-*`, `012-*`, `013-*`](patches/openwrt-one/base-files/) | OpenWrt One | Build dual UBI firmware volumes in the v1.6 layout, wire in RAM provisioning U-Boot, and reserve firmware-volume headroom for upgrades. | Local |
+| [One base-files `014-*`, `015-*`](patches/openwrt-one/base-files/) | OpenWrt One | Reject over-the-air updates between the v1.5 and v1.6 A/B layouts, and publish only the separate NOR boot firmware, never a whole-NOR factory image. | Local |
 | [8X base-files `450-*`, `451-*`, `460-*`, `461-*`, `462-*`](patches/bpi-r4-pro/base-files/), [4E equivalents](patches/bpi-r4-pro-4e/base-files/) | R4-Pro 8X/4E | Register U-Boot/image targets, environment access, compatibility identifiers and upgrade dispatch. | Local |
 | [Common base-files `z13-*`](patches/common/base-files/) | Shared product configuration | Connect the hardware reset button to the product factory-reset action. | Local |
 
@@ -75,9 +77,12 @@ Image-layout and installation integration:
 | [8X kernel `991-bpirouter-*`](patches/bpi-r4-pro/kernel/) | R4-Pro 8X | Add A/B root-disk device-tree integration. | Local |
 | [One base-files `z10-*`](patches/openwrt-one/base-files/), [kernel `z12-*`](patches/openwrt-one/kernel/) | OpenWrt One | Describe the two UBI firmware slots and create the block devices needed to boot either slot. | Local |
 | [R3 kernel `z11-*`](patches/bpi-r3/kernel/), [R4 kernel `z11-*`](patches/bpi-r4/kernel/), [R3-Mini base-files `z11-*`](patches/bpi-r3-mini/base-files/), [R4-Lite base-files `z11-*`](patches/bpi-r4-lite/base-files/), [One base-files `z11-*`](patches/openwrt-one/base-files/) | Named boards | Set board-appropriate running, failsafe and status LED behavior. | Local |
+| [R4-Lite base-files `z12-*`](patches/bpi-r4-lite/base-files/) | R4-Lite | Add the Ethernet alias U-Boot uses to pass the saved MAC address to the LAN GMAC; the WAN MAC is unchanged. | Local |
 | [R3 kernel `z12-*`](patches/bpi-r3/kernel/) | R3 | Correct active-low fan cooling levels so the fan starts at the intended 60 C trip. | Local |
 | [Common kernel `980-*`](patches/common/kernel/) | Shared MediaTek Ethernet driver | Restrict tag-dependent DSA queue mapping to the MediaTek tag format. | Local |
 | [Common kernel `989-*`](patches/common/kernel/) | Shared MediaTek Ethernet driver | Unregister the netdevice notifier when probe is deferred, preventing stale registrations. | Local |
+| [Common kernel `991-*`](patches/common/kernel/) | Shared netfilter | Also bound the TCP MSS set by `nft rt mtu` by the ingress link MTU, for forwarded replies whose reverse route differs from the unmarked lookup. | Local |
+| [Common kernel `992-*`](patches/common/kernel/) | Shared MediaTek Ethernet driver | Log the assigned random MAC address instead of bytes of the device structure. | Local |
 | [Common openwrt `002-*`](patches/common/openwrt/) | Shared kernel configuration | Include source-version metadata in loadable modules for module identification. | Local |
 | [8X kernel `990-*`](patches/bpi-r4-pro/kernel/), [4E kernel `990-*`](patches/bpi-r4-pro-4e/kernel/) | R4-Pro 8X/4E | Describe each board's devices, storage and network topology. | Reference-derived; MediaTek notices retained |
 | [4E kernel `991-*`, `993-*`, `998-*`](patches/bpi-r4-pro-4e/kernel/) | R4-Pro 4E | Add WAN-media overlays, Ethernet LEDs, and correct the onboard PHY firmware-trigger register access. | Local |
@@ -118,6 +123,20 @@ See the [MxL origin note](patches/bpi-r4-pro/MXL862XX-UPSTREAM.md) for provenanc
 | [Common base-files `006-*`, `007-*`](patches/common/base-files/) | Supported QMI modules | Check data-format evidence and wait for control readiness before negotiating a data session. | Local |
 | [Common packages `001-*`, `003-*`](patches/common/packages/) | Multi-WAN | Refresh connected-route handling after cleanup and restart parent tracking when a dynamic child obtains an address. | Local |
 | [Common packages `002-*`](patches/common/packages/) | WAN SQM | Coordinate SQM start/stop ownership with the product's network lifecycle. | Local |
+| [Common packages `004-*`](patches/common/packages/) | Multi-WAN | Limit routing-table cleanup to the product's reserved Multi-WAN tables, leaving other services' tables. | Local |
+| [Common openwrt `007-*`](patches/common/openwrt/) | netifd PPPoE | Apply a PPPoE interface's MTU option to the PPP link, not to its parent Ethernet device. | Local |
+| [Common base-files `008-*`](patches/common/base-files/) | firewall4 | Run the product's remote-networking firewall check before firewall start or reload, and keep the default-deny table when the check cannot be completed. | Local |
+
+### Remote networking (Tailscale)
+
+| Patch group | Boards | Purpose | Source |
+|---|---|---|---|
+| [Common packages `005-*`](patches/common/packages/) | All seven | On OpenWrt, always use the Multi-WAN-compatible policy-routing position, even while Multi-WAN is stopped, and leave Tailscale's own transport packets to the Multi-WAN WAN policy. | Local |
+| [Common packages `006-*`](patches/common/packages/) | All seven | Make an explicitly empty exit-node setting clear every exit-node selection form. | Local |
+| [Common packages `007-*`](patches/common/packages/) | All seven | Replace the package's init script with a service that starts Tailscale only after the product's remote-networking check passes, including on respawn. | Local |
+| [Common packages `008-*`](patches/common/packages/) | All seven | Install Tailscale's licence notices, module constraints and linked module versions under `/usr/share/tailscale/`. | Local |
+| [Common packages `009-*`](patches/common/packages/) | All seven | Report the local key-expiry decision for the router's own node. | Local |
+| [Common packages `010-*`](patches/common/packages/) | All seven | Build without the peer API server, Wake-on-LAN and exit-node advertisement. | Local |
 
 The public patches are only part of the complete firmware. The proprietary
 UI/APID package is supplied separately as a binary; this guide does not describe

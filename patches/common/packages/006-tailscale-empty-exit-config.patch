@@ -1,0 +1,22 @@
+diff --git a/net/tailscale/patches/101-config-clear-empty-exit-node.patch b/net/tailscale/patches/101-config-clear-empty-exit-node.patch
+new file mode 100644
+--- /dev/null
++++ b/net/tailscale/patches/101-config-clear-empty-exit-node.patch
+@@ -0,0 +1,17 @@
++An explicitly empty exit node must clear every selection form. Otherwise
++startup or reload can retain an old IP or automatic selection and install
++default routes despite the declarative configuration disabling exit usage.
++
++--- a/ipn/conf.go
+++++ b/ipn/conf.go
++@@ -89,6 +89,10 @@
++ 		mp.RouteAllSet = true
++ 	}
++ 	if c.ExitNode != nil {
+++		if *c.ExitNode == "" {
+++			mp.ExitNodeIPSet = true
+++			mp.AutoExitNodeSet = true
+++		}
++ 		ip, err := netip.ParseAddr(*c.ExitNode)
++ 		if err == nil {
++ 			mp.ExitNodeIP = ip

@@ -2,7 +2,7 @@
 # build-image.sh — Quick firmware packaging using ImageBuilder
 #
 # Usage:
-#   ./scripts/build-image.sh [--board <board>]              Quick mode
+#   Quick mode is unavailable with the v1.6 product S2S stack.
 #   ./scripts/build-image.sh [--board <board>] --release    Release mode
 #   --board: bpi-r4 (default), bpi-r4-lite, bpi-r4-pro, bpi-r3, bpi-r3-mini, openwrt-one
 #
@@ -62,8 +62,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+[ "$MODE" = release ] || {
+    echo "Quick ImageBuilder builds are unsupported with the product S2S stack: official packages lack the required Tailscale patches." >&2
+    echo "Use scripts/prepare.sh --board <board> followed by scripts/build-full.sh --board <board>." >&2
+    exit 1
+}
+
 source "$SCRIPT_DIR/boards.sh"
 board_init "$BOARD"
+if [ "$BOARD" = openwrt-one ]; then
+    command -v "${BUSYBOX:-busybox}" >/dev/null || { echo "OpenWrt One checks require host busybox (or BUSYBOX)." >&2; exit 1; }
+    command -v cc >/dev/null || { echo "OpenWrt One checks require a host C compiler (cc)." >&2; exit 1; }
+fi
 
 # A board whose identity is frozen but whose implementation is not cannot produce
 # this output. Refuse by name so the message points at the missing build prerequisites
@@ -94,6 +104,15 @@ BPIR_MWAN3_STOCK="$WORK_DIR/feeds/packages/net/mwan3/files/etc/config/mwan3" \
     "$SCRIPT_DIR/test-mwan3-canonical.sh"
 "$SCRIPT_DIR/test-mwan3-route-delete-order.sh"
 "$SCRIPT_DIR/test-mwan3-dynamic-child.sh"
+BPIR_OPENWRT_DIR="$WORK_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-mwan3-routing-reservation.py" --prepared
+"$SCRIPT_DIR/test-tailscale-product-service.py" --prepared "$WORK_DIR/feeds/packages"
+if [ "$BOARD" = openwrt-one ]; then
+    # ImageBuilder reuses the source and host tools from the required full build.
+    ONE_UBOOT_DIR="$WORK_DIR/build_dir/target-aarch64_cortex-a53_musl/u-boot-mt7981_openwrt_one-nor/u-boot-2025.10"
+    OPENWRT_DIR="$WORK_DIR" "$SCRIPT_DIR/test-one-layout.py" --prepared
+    OPENWRT_DIR="$WORK_DIR" UBOOT_DIR="$ONE_UBOOT_DIR" "$SCRIPT_DIR/test-one-nor-installer.py" --prepared
+    OPENWRT_DIR="$WORK_DIR" UBOOT_DIR="$ONE_UBOOT_DIR" "$SCRIPT_DIR/test-one-mtd-erase.py" --prepared
+fi
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-sqm-canonical.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-offload-disabled.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-owned-configs.sh"
@@ -184,7 +203,7 @@ fi
 # 2. Choose packaging method based on mode
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-BASE_PACKAGES="nginx-ssl openssl-util wireguard-tools openvpn-openssl mwan3 sqm flock \
+BASE_PACKAGES="nginx-ssl openssl-util wireguard-tools openvpn-openssl mwan3 sqm flock tailscale \
     $WIFI_PKGS \
     luci luci-ssl"
 
@@ -286,6 +305,13 @@ else
     # below has required the sqm pair since whole-file config ownership was
     # gated, which is how quick mode came to fail it.
     BASE_FILES="$FEEDS_DIR/net/bpirouter-base/files"
+    # S2S preconditions also apply while the feature is disabled.
+    mkdir -p "$FILES_DIR/etc/config" "$FILES_DIR/usr/share/nftables.d/ruleset-pre"
+    cp "$BASE_FILES/etc/config/bpirouter" "$FILES_DIR/etc/config/bpirouter"
+    cp "$WORK_DIR/feeds/packages/net/tailscale/files/tailscale.conf" "$FILES_DIR/etc/config/tailscale"
+    cp "$BASE_FILES/usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft" \
+        "$FILES_DIR/usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft"
+
     cp "$BASE_FILES/etc/uci-defaults/11-bpirouter-mwan3-canonical" "$FILES_DIR/etc/uci-defaults/"
     cp "$BASE_FILES/etc/uci-defaults/12-bpirouter-sqm-canonical" "$FILES_DIR/etc/uci-defaults/"
 	cp "$BASE_FILES/etc/uci-defaults/13-bpirouter-offload-disabled" "$FILES_DIR/etc/uci-defaults/"

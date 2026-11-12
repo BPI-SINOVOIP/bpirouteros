@@ -95,12 +95,12 @@ VALID_BOARDS="bpi-r4  bpi-r4-lite  bpi-r3  bpi-r3-mini  openwrt-one  bpi-r4-pro"
 # is selected by the release-specific board set below; the lock must match it.
 PLANNED_BOARDS="bpi-r4-pro-4e"
 
-# Product v1.5.0 includes seven SKUs in both RC and stable releases. Release
-# admission does not claim hardware acceptance or clear known issues.
+# Product v1.5.0 and v1.6.0 include seven SKUs in RC and stable releases.
+# Admission does not claim hardware acceptance or clear known issues.
 bpir_select_release_boards() {
     VALID_BOARDS="bpi-r4 bpi-r4-lite bpi-r3 bpi-r3-mini openwrt-one bpi-r4-pro"
     PLANNED_BOARDS="bpi-r4-pro-4e"
-    if [[ "$1" =~ ^v1\.5\.0(-rc[1-9][0-9]*)?$ ]]; then
+    if [[ "$1" =~ ^v1\.[56]\.0(-rc[1-9][0-9]*)?$ ]]; then
         VALID_BOARDS+=" bpi-r4-pro-4e"
         PLANNED_BOARDS=""
     fi
@@ -309,7 +309,6 @@ $RELEASE_BASE-factory.ubi
 $RELEASE_BASE-flashkit.tar.gz
 $RELEASE_BASE-initramfs.itb
 $RELEASE_BASE-nor-bl31-uboot.fip
-$RELEASE_BASE-nor-factory.bin
 $RELEASE_BASE-nor-preloader.bin
 $RELEASE_BASE-ram-bl31-uboot.fip
 $RELEASE_BASE-snand-bl31-uboot.fip

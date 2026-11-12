@@ -1,0 +1,40 @@
+Reject OTA between the original 32/80 MiB and new 64/48 MiB A/B layouts.
+
+The major compatibility version is part of the installed layout, not user
+configuration. Keep the new image's upgrade check at 2.0 even if a user restores
+an old system configuration. Other boards retain the upstream UCI behavior.
+The original firmware already rejects major-version mismatches through fwtool.
+
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -2455,5 +2455,7 @@ define Device/openwrt_one
+   DEVICE_VENDOR := OpenWrt
+   DEVICE_MODEL := One
++  DEVICE_COMPAT_VERSION := 2.0
++  DEVICE_COMPAT_MESSAGE := The storage layout changed. Migration requires the new flashkit UART installer; the old firmware's reset-button USB restore is not supported.
+   DEVICE_DTS := mt7981b-openwrt-one
+   DEVICE_DTS_DIR := ../dts
+   DEVICE_DTC_FLAGS := --pad 4096
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/05_compat-version
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/05_compat-version
+@@ -5,6 +5,9 @@
+ board_config_update
+ 
+ case "$(board_name)" in
++	openwrt,one)
++		ucidef_set_compat_version "2.0"
++		;;
+ 	bananapi,bpi-r3)
+ 		ucidef_set_compat_version "1.3"
+ 		;;
+--- a/package/base-files/files/lib/upgrade/fwtool.sh
++++ b/package/base-files/files/lib/upgrade/fwtool.sh
+@@ -48,6 +48,8 @@ fwtool_check_image() {
+ 	device="$(cat /tmp/sysinfo/board_name)"
+ 	devicecompat="$(uci -q get system.@system[0].compat_version)"
+ 	[ -n "$devicecompat" ] || devicecompat="1.0"
++	# Restoring old settings must not change the installed storage layout.
++	[ "$device" != "openwrt,one" ] || devicecompat="2.0"
+ 
+ 	json_get_var imagecompat compat_version
+ 	json_get_var compatmessage compat_message

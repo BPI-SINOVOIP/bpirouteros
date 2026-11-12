@@ -1,0 +1,15 @@
+diff --git a/net/tailscale/Makefile b/net/tailscale/Makefile
+--- a/net/tailscale/Makefile
++++ b/net/tailscale/Makefile
+@@ -29,7 +29,10 @@ PKG_BUILD_FLAGS:=no-mips16
+ GO_PKG:=tailscale.com/cmd/tailscaled
+ GO_PKG_LDFLAGS:=-X 'tailscale.com/version.longStamp=$(PKG_VERSION)-$(PKG_RELEASE) (OpenWrt)'
+ GO_PKG_LDFLAGS_X:=tailscale.com/version.shortStamp=$(PKG_VERSION)
+-GO_PKG_TAGS:=ts_include_cli,ts_omit_aws,ts_omit_bird,ts_omit_completion,ts_omit_kube,ts_omit_systray,ts_omit_taildrop,ts_omit_tap,ts_omit_tpm
++# BpiRouter: peerapi is served inside tailscaled, outside the S2S nftables
++# guard, and v1.6 offers no exit node. Omit the server, Wake-on-LAN and
++# exit-node advertisement that depends on it.
++GO_PKG_TAGS:=ts_include_cli,ts_omit_advertiseexitnode,ts_omit_aws,ts_omit_bird,ts_omit_completion,ts_omit_kube,ts_omit_peerapiserver,ts_omit_systray,ts_omit_taildrop,ts_omit_tap,ts_omit_tpm,ts_omit_wakeonlan
+ 
+ include $(INCLUDE_DIR)/package.mk
+ include ../../lang/golang/golang-package.mk

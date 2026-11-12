@@ -3,9 +3,27 @@
 [Chinese](INSTALLATION.zh-CN.md) · [Features and limitations](FEATURES.md)
 
 Use the files and feature guide supplied with the version you are installing.
-This guide covers first installation and complete reinstallation. Installation
-erases settings and data on the destination storage. For v1.5, do not upgrade
-an older or another vendor's installation in place; reinstall using this guide.
+This guide covers v1.6 first installation, complete reinstallation and migration
+from BpiRouter v1.5. Installation erases settings and data on the destination
+storage. Do not upgrade another vendor's installation in place.
+
+### Moving from BpiRouter v1.5
+
+- **OpenWrt One:** back up settings, then use the **v1.6 One flashkit and serial
+  loader in section 3** for a complete reinstall. Neither an in-place update
+  (with or without settings) nor the old firmware's reset-button USB restore
+  can perform this migration. Do not bypass an incompatible-image message.
+  Subsequent v1.6 updates retain A/B recovery, but cannot roll back to the old
+  v1.5 installation. Returning to v1.5 requires its full installation procedure.
+- **The other six models:** use the exact model's v1.6 upgrade image in
+  **System → Firmware**, following the release's upgrade instructions. Back up
+  first; confirm the firmware trial only after checking access and connectivity.
+  Use the full installation procedure below for a new or non-BpiRouter device.
+
+After reinstallation, complete setup before restoring a settings backup.
+An older backup may exceed the eight-interface Multi-WAN limit on any model;
+see [Multi-WAN recovery](FEATURES.md#multiple-internet-connections) before
+restoring. A downloaded backup does not transfer remote-network identity.
 
 ## 1. Prepare and choose the correct download
 
@@ -132,11 +150,13 @@ original firmware provides the same USB installation procedure.
 2. Wait for `PROVISION OK - booting NAND` and the automatic restart. After
    writing has finished, power off, remove the USB stick, select NAND boot
    and power on. Continue with section 4. There is no eMMC stage.
-3. For later complete reinstallation on a board already running the matching
-   BpiRouter installation, insert the prepared USB stick while powered off
-   and hold the rear reset/back button during power-on. Wait for
+3. Only after installing the matching v1.6 system with the serial loader, later
+   complete reinstalls can use its NAND-startup reset-button entry. Select NAND
+   boot, insert the prepared matching USB stick while powered off, and hold the
+   rear reset/back button during power-on. Wait for
    `USB restore done - rebooting`. This also erases settings. If that entry
-   is unavailable, use the loader procedure above.
+   is unavailable, use the loader procedure above. The USB-side front button
+   belongs to a different recovery entry; do not substitute it in this procedure.
 
 ## 4. First login
 

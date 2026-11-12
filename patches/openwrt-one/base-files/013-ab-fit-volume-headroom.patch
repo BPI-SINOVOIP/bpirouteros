@@ -9,9 +9,11 @@ Build/ubinize-image now takes an optional third word, the volume size in MiB,
 and passes it through to the --part syntax the script already understands
 (name=image=sizeMiB). Targets that pass two words are unaffected.
 
-fit-a and fit-b are pinned to 32 MiB each: 265 LEBs of the 2040 the 256M part
-exposes, +84 LEBs over the previous pair, leaving ~6 MiB unallocated for wear
-levelling. That is ~4.9 MiB of growth room per slot at today's image size.
+fit-a and fit-b are pinned to 64 MiB each. Each overlay is reduced from 80 to
+48 MiB in the matching boot environment and apid. With 126976-byte LEBs, the
+two fits, two overlays and 8 MiB cfgstage still reserve 1919 PEBs in total.
+This layout requires a full reinstall; the compatibility patch rejects OTA
+between layouts even when configuration preservation is disabled.
 
 --- a/include/image-commands.mk
 +++ b/include/image-commands.mk
@@ -31,13 +33,13 @@ levelling. That is ~4.9 MiB of growth room per slot at today's image size.
    ARTIFACT/snand-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-snand
    ARTIFACT/ram-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-ram
 -  ARTIFACT/factory.ubi			:= ubinize-image fit-a squashfs-sysupgrade.itb
-+  ARTIFACT/factory.ubi			:= ubinize-image fit-a squashfs-sysupgrade.itb 32
++  ARTIFACT/factory.ubi			:= ubinize-image fit-a squashfs-sysupgrade.itb 64
    ARTIFACT/snand-factory.bin		:= mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 256k | \
  					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 512k | \
  					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 768k | \
  					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 1024k | \
 -					   ubinize-image fit-a squashfs-sysupgrade.itb
-+					   ubinize-image fit-a squashfs-sysupgrade.itb 32
++					   ubinize-image fit-a squashfs-sysupgrade.itb 64
    ARTIFACT/nor-factory.bin		:= mt7981-bl2 nor-ddr4 | pad-to 256k | \
  					   append-openwrt-one-eeprom | pad-to 1024k | \
  					   mt7981-bl31-uboot openwrt_one-nor | pad-to 512k | \
@@ -46,7 +48,7 @@ levelling. That is ~4.9 MiB of growth room per slot at today's image size.
    PAGESIZE := 2048
    UBINIZE_PARTS := fip=:$(STAGING_DIR_IMAGE)/mt7981_openwrt_one-snand-u-boot.fip \
 -		   fit-b=$(BIN_DIR)/openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb
-+		   fit-b=$(BIN_DIR)/openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb=32
++		   fit-b=$(BIN_DIR)/openwrt-mediatek-filogic-openwrt_one-squashfs-sysupgrade.itb=64
  endef
  TARGET_DEVICES += openwrt_one
  

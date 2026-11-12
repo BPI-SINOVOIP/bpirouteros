@@ -1,0 +1,149 @@
+diff --git a/package/network/config/firewall4/patches/910-bpirouter-s2s-lock-boundary.patch b/package/network/config/firewall4/patches/910-bpirouter-s2s-lock-boundary.patch
+new file mode 100644
+--- /dev/null
++++ b/package/network/config/firewall4/patches/910-bpirouter-s2s-lock-boundary.patch
+@@ -0,0 +1,133 @@
++--- a/root/sbin/fw4
+++++ b/root/sbin/fw4
++@@ -16,9 +16,30 @@
++ 	exit 1
++ }
++ 
++-start() {
++-	{
++-		flock -x 1000
+++product_preflight() {
+++	local status=0
+++	[ -x /usr/bin/bpirouter-apid ] || return 0
+++	/usr/bin/bpirouter-apid --s2s-firewall=preflight 9>&1000 1000>&- || status=$?
+++	case "$status" in
+++		0) return 0;;
+++		10) return 1;;
+++		11) rm -f "$STATE"; PRODUCT_REBUILD=1; return 0;;
+++	esac
+++	echo "S2S preflight failed; authorization is not verified" >&2
+++	# Do not retain old grants if the helper itself failed. These attempts
+++	# cannot verify isolation; the status must remain explicitly unknown.
+++	nft -f /usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft
+++	ubus call service delete '{"name":"tailscale"}'
+++	mkdir -p /var/run/bpirouter-s2s
+++	printf '%s\n' '{"status":"isolation_unknown"}' > /var/run/bpirouter-s2s/firewall.json
+++	# A missing/crashed helper must not suppress cold-start base protection.
+++	# Preserve an existing ruleset only after actual base-chain readback.
+++	ACTION=s2s-loaded utpl -S "$MAIN" && return 1
+++	rm -f "$STATE"
+++	PRODUCT_REBUILD=1
+++}
+++
+++start_locked() {
++ 
++ 		case "$1" in
++ 			start)
++@@ -37,6 +58,17 @@
++ 
++ 		ACTION=includes \
++ 			utpl -S $MAIN
+++}
+++
+++start() {
+++	{
+++		flock -x 1000
+++		product_preflight || return 1
+++		if [ "$PRODUCT_REBUILD" = 1 ]; then
+++			start_locked
+++		else
+++			start_locked "$1"
+++		fi
++ 	} 1000>$LOCK
++ }
++ 
++@@ -105,9 +137,14 @@
++ 		flush
++ 	;;
++ 	restart)
++-		QUIET=1 print | nft ${VERBOSE} -c -f $STDIN || die "The rendered ruleset contains errors, not doing firewall restart."
++-		stop || rm -f $STATE
++-		start
+++		{
+++			flock -x 1000
+++			product_preflight || exit 1
+++			QUIET=1 print | nft ${VERBOSE} -c -f $STDIN || die "The rendered ruleset contains errors, not doing firewall restart."
+++			nft delete table inet fw4
+++			rm -f "$STATE"
+++			start_locked
+++		} 1000>$LOCK
++ 	;;
++ 	check)
++ 		if [ -n "$QUIET" ]; then
++--- a/root/usr/share/firewall4/main.uc
+++++ b/root/usr/share/firewall4/main.uc
++@@ -115,6 +115,30 @@
++ 	exit(1);
++ }
++ 
+++function product_firewall_loaded() {
+++	let pipe = require("fs").popen("nft -j list table inet fw4 2>/dev/null", "r");
+++	if (!pipe)
+++		return false;
+++	let raw = pipe.read("all"), status = pipe.close(), doc;
+++	if (status)
+++		return false;
+++	try { doc = json(raw); } catch (e) { return false; }
+++	let chains = {}, rules = {};
+++	for (let obj in doc.nftables) {
+++		let c = obj.chain, r = obj.rule;
+++		if (c && c.family == "inet" && c.table == "fw4" && c.type == "filter" &&
+++		    c.name == c.hook && type(c.prio) == "int" && c.prio == 0 &&
+++		    (c.policy == "accept" || c.policy == "drop"))
+++			chains[c.name] = true;
+++		if (r && r.family == "inet" && r.table == "fw4" && length(r.expr))
+++			rules[r.chain] = true;
+++	}
+++	for (let name in [ "input", "output", "forward" ])
+++		if (!chains[name] || !rules[name])
+++			return false;
+++	return true;
+++}
+++
++ function run_includes() {
++ 	let state = read_state(),
++ 	    paths = [];
++@@ -124,9 +148,11 @@
++ 			continue;
++ 
++ 		let path = replace(inc.path, "'", "'\\''");
+++		let product_lock = (inc.path == "/usr/libexec/bpirouter-s2s-firewall")
+++			? "exec 9>&1000; " : "";
++ 		let rc = system([
++ 			'sh', '-c',
++-			`exec 1000>&-; config() { echo "You cannot use UCI in firewall includes!" >&2; exit 1; }; . '${path}'`
+++			`${product_lock}exec 1000>&-; config() { echo "You cannot use UCI in firewall includes!" >&2; exit 1; }; . '${path}'`
++ 		], 30000);
++ 
++ 		if (rc != 0)
++@@ -136,6 +162,9 @@
++ 
++ 
++ switch (getenv("ACTION")) {
+++case "s2s-loaded":
+++	exit(product_firewall_loaded() ? 0 : 1);
+++
++ case "start":
++ 	return render_ruleset(true);
++ 
++--- /dev/null
+++++ b/root/usr/libexec/bpirouter-s2s-firewall
++@@ -0,0 +1,2 @@
+++#!/bin/sh
+++exec /usr/bin/bpirouter-apid --s2s-firewall=apply
+--- a/package/network/config/firewall4/Makefile
++++ b/package/network/config/firewall4/Makefile
+@@ -5,7 +5,7 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=firewall4
+-PKG_RELEASE:=2
++PKG_RELEASE:=3
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL=$(PROJECT_GIT)/project/firewall4.git

@@ -57,6 +57,8 @@ bpir_reset_openwrt_source() {
         package/network/config/netifd/patches/901-bpirouter-proto-busy.patch \
         package/network/config/netifd/patches/902-bpirouter-protocol-script-lifetime.patch \
         package/network/config/netifd/patches/903-bpirouter-host-route-lifetime.patch \
+        package/network/config/netifd/patches/904-bpirouter-pppoe-parent-mtu.patch \
+        package/network/config/firewall4/patches/910-bpirouter-s2s-lock-boundary.patch \
         package/network/utils/uqmi/patches/100-fix-ctl-data-format-request.patch \
         >/dev/null 2>&1 || return 1
 }

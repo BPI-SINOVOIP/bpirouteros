@@ -164,6 +164,10 @@ case " $PLANNED_BOARDS " in
         } ;;
 esac
 step "Board: $BOARD ($PROFILE, $ARCH)"
+if [ "$BOARD" = openwrt-one ]; then
+    command -v "${BUSYBOX:-busybox}" >/dev/null || { echo "OpenWrt One checks require host busybox (or BUSYBOX)." >&2; exit 1; }
+    command -v cc >/dev/null || { echo "OpenWrt One checks require a host C compiler (cc)." >&2; exit 1; }
+fi
 
 # Lock before validating the marker. A build that checked first and then waited
 # could consume a tree another prepare changed while it was queued.
@@ -312,6 +316,11 @@ BPIR_MWAN3_STOCK="$WORK_DIR/feeds/packages/net/mwan3/files/etc/config/mwan3" \
     "$SCRIPT_DIR/test-mwan3-canonical.sh"
 "$SCRIPT_DIR/test-mwan3-route-delete-order.sh"
 "$SCRIPT_DIR/test-mwan3-dynamic-child.sh"
+# Full kernel behavior runs separately in an isolated user/network namespace.
+# Ordinary image builds need no namespace privileges.
+BPIR_OPENWRT_DIR="$WORK_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-mwan3-routing-reservation.py" --prepared
+"$SCRIPT_DIR/test-s2s-reprepare.py" "$WORK_DIR"
+"$SCRIPT_DIR/test-tailscale-product-service.py" --prepared "$WORK_DIR/feeds/packages"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-sqm-canonical.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" "$SCRIPT_DIR/test-offload-disabled.sh"
 BPIR_FEEDS_DIR="$FEEDS_DIR" BPIR_UI_DIR="$UI_DIR" "$SCRIPT_DIR/test-owned-configs.sh"
@@ -338,6 +347,15 @@ make -j$JOBS
 # This test compiles netifd functions against host libubox. Both are generated
 # by the build above; a clean first build has neither at the pre-build gates.
 BPIR_OPENWRT_DIR="$WORK_DIR" "$SCRIPT_DIR/test-netifd-host-route.sh"
+BPIR_OPENWRT_DIR="$WORK_DIR" "$SCRIPT_DIR/test-netifd-pppoe-mtu.py" --prepared
+BPIR_OPENWRT_DIR="$WORK_DIR" "$SCRIPT_DIR/test-nft-mss.py" --prepared
+if [ "$BOARD" = openwrt-one ]; then
+    # Host libubox and prepared U-Boot sources do not exist before a first build.
+    ONE_UBOOT_DIR="$WORK_DIR/build_dir/target-aarch64_cortex-a53_musl/u-boot-mt7981_openwrt_one-nor/u-boot-2025.10"
+    OPENWRT_DIR="$WORK_DIR" "$SCRIPT_DIR/test-one-layout.py" --prepared
+    OPENWRT_DIR="$WORK_DIR" UBOOT_DIR="$ONE_UBOOT_DIR" "$SCRIPT_DIR/test-one-nor-installer.py" --prepared
+    OPENWRT_DIR="$WORK_DIR" UBOOT_DIR="$ONE_UBOOT_DIR" "$SCRIPT_DIR/test-one-mtd-erase.py" --prepared
+fi
 
 # Inspect what package installation actually placed in the target rootfs.
 # Source-level policy is not evidence that the assembled image kept it.

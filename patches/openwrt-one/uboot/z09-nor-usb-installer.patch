@@ -1,0 +1,51 @@
+Use the existing NOR U-Boot as a button-gated USB-to-NAND installer.
+
+Keep the NOR boot variant and compressed FIP, but use only compiled defaults.
+The installer consumes the same factory image and CRC sidecar as the UART kit.
+Use the UART kit's USB selector for partitioned and whole-disk FAT media.
+Validate the source before erasing, and distinguish input from NAND failures.
+Check lengths before loading: the image must end before the CRC buffer at
+0x4f000000; the readback at 0x54000000 is separate. CRC32 detects corruption,
+not image authenticity or board identity. Only use an OpenWrt One flashkit.
+No NOR writes, persistent environment saves, Linux boot or automatic reset.
+After success the operator must power off and select NAND boot.
+
+--- a/configs/mt7981_openwrt-one-nor_defconfig
++++ b/configs/mt7981_openwrt-one-nor_defconfig
+@@ -16,7 +16,7 @@
+ CONFIG_DEBUG_UART=y
+ CONFIG_FIT=y
+ CONFIG_SPI_BOOT=y
+-CONFIG_AUTOBOOT_MENU_SHOW=y
++CONFIG_BOOTDELAY=0
+ CONFIG_USE_PREBOOT=y
+ CONFIG_DEFAULT_FDT_FILE="openwrt-one"
+ CONFIG_SYS_CBSIZE=512
+@@ -78,10 +78,10 @@
+ CONFIG_CMD_UBI=y
+ CONFIG_CMD_UBI_RENAME=y
+ CONFIG_ENV_OVERWRITE=y
+-CONFIG_ENV_REDUNDANT=y
++CONFIG_ENV_IS_NOWHERE=y
+ CONFIG_ENV_RELOC_GD_ENV_ADDR=y
+ CONFIG_ENV_USE_DEFAULT_ENV_TEXT_FILE=y
+-CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="defenvs/openwrt-one-nor_env"
++CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="defenvs/openwrt-one-nor-installer_env"
+ CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG=y
+ CONFIG_VERSION_VARIABLE=y
+ CONFIG_NET_RANDOM_ETHADDR=y
+--- /dev/null
++++ b/defenvs/openwrt-one-nor-installer_env
+@@ -0,0 +1,12 @@
++loadaddr=0x46000000
++usb_pgood_delay=4000
++bootdelay=0
++bootfile_factory=snand-factory.bin
++bootfile_factory_crc=snand-factory.crc
++preboot=led white on ; led green off ; led orange off
++usb_image=usb start && fatsize usb 0 $bootfile_factory && setenv imgsz $filesize && itest.l $imgsz -gt 0x100000 && itest.l $imgsz -le 0x9000000 && fatload usb 0 $loadaddr $bootfile_factory $imgsz && itest.l $filesize -eq $imgsz && fatsize usb 0 $bootfile_factory_crc && itest.l $filesize -eq 4 && fatload usb 0 0x4f000000 $bootfile_factory_crc 4 && itest.l $filesize -eq 4
++verify_src=crc32 $loadaddr $imgsz 0x4f000004 && cmp.b 0x4f000000 0x4f000004 0x4
++verify_nand=mtd read spi-nand0 0x54000000 0x0 $imgsz && cmp.b $loadaddr 0x54000000 $imgsz
++flash_nand=mtd erase spi-nand0 && mtd write spi-nand0 $loadaddr 0x0 $imgsz && run verify_nand
++install=if run usb_image && run verify_src ; then if run flash_nand ; then led orange off ; led green on ; echo "INSTALL OK: power off, select NAND boot, then power on." ; else led green off ; led orange on ; echo "INSTALL FAILED: NAND erase/write/verification failed; installation incomplete. Check device storage and power." ; fi ; else led green off ; led orange on ; echo "INSTALL FAILED: USB image read or CRC check failed; check the One flashkit and USB drive before retrying." ; fi
++bootcmd=if button front ; then run install ; else echo "NOR installer: insert the One flashkit USB drive and hold the front button during power-on to erase and reinstall NAND." ; fi

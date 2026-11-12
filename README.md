@@ -33,11 +33,17 @@ sudo apt update
 sudo apt install build-essential clang flex bison g++ gawk gcc-multilib \
   g++-multilib gettext git libncurses-dev libssl-dev python3 python3-setuptools \
   rsync swig unzip zlib1g-dev file wget curl ca-certificates jq \
-  tar gzip bzip2 xz-utils zstd patch perl util-linux squashfs-tools
+  tar gzip bzip2 xz-utils zstd patch perl util-linux squashfs-tools busybox
 ```
 
 The delivery archive uses gzip. Upstream dependencies may use other compression
 formats, so their extraction tools are still required.
+
+Host regression checks use Python 3, Git, a C compiler and BusyBox `ash`.
+If BusyBox is installed outside `PATH`, set `BUSYBOX` to its executable path.
+The OpenWrt One checks also use host libubox and prepared U-Boot sources generated
+by the full build; they run after compilation. ImageBuilder requires these
+outputs from a full build of the same board.
 
 ## 2. Obtain the repository
 
@@ -163,6 +169,10 @@ establish successful flashing or hardware acceptance.
 
 Project code, configurations and patches are included. Upstream OpenWrt, feeds
 and download caches are not included; the build retrieves them over the network.
+Go dependencies can also be downloaded during compilation. The archive download
+lock is not an offline dependency cache. Tailscale's upstream module constraints,
+linked module versions/checksums and upstream licence notices are installed in
+`/usr/share/tailscale/` in the resulting firmware.
 `proprietary-artifacts/bpirouter-ui.apk` contains the matching UI static assets
 and APID binary, not their private source. Its separate licence is in
 `proprietary-artifacts/LICENSE`. It is not part of the GPL corresponding source;

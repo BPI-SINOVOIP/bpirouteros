@@ -1,0 +1,97 @@
+diff --git a/net/tailscale/patches/100-bpirouter-mwan-routing.patch b/net/tailscale/patches/100-bpirouter-mwan-routing.patch
+new file mode 100644
+--- /dev/null
++++ b/net/tailscale/patches/100-bpirouter-mwan-routing.patch
+@@ -0,0 +1,92 @@
++--- a/wgengine/router/osrouter/router_linux.go
+++++ b/wgengine/router/osrouter/router_linux.go
++@@ -145,27 +145,10 @@
++ 		}
++ 	}
++ 
++-	// A common installation of OpenWRT involves use of the 'mwan3' package.
++-	// This package installs ip-tables rules like:
++-	//  -A mwan3_fallback_policy -m mark --mark 0x0/0x3f00 -j MARK --set-xmark 0x100/0x3f00
++-	//
++-	// which coupled with an ip rule:
++-	//  2001: from all fwmark 0x100/0x3f00 lookup 1
++-	//
++-	// has the effect of gobbling tailscale packets, because tailscale by default installs
++-	// its policy routing rules at priority 52xx.
++-	//
++-	// As such, if we are running on openWRT, detect a mwan3 config, AND detect a rule
++-	// with a preference 2001 (corresponding to the first interface wman3 manages), we
++-	// shift the priority of our policies to 13xx. This effectively puts us between mwan3's
++-	// permit-by-src-ip rules and mwan3 lookup of its own routing table which would drop
++-	// the packet.
++-	isMWAN3, err := checkOpenWRTUsingMWAN3()
++-	if err != nil {
++-		r.logf("error checking mwan3 installation: %v", err)
++-	} else if isMWAN3 {
+++	// BpiRouter reserves this position even while mwan3 is stopped. The
+++	// inverted bypass rule leaves transport packets to mwan3's WAN policy.
+++	if getDistroFunc() == distro.OpenWrt {
++ 		r.ipPolicyPrefBase = 1300
++-		r.logf("mwan3 on openWRT detected, switching policy base priority to 1300")
++ 	}
++ 
++ 	r.v6Available = linuxfw.CheckIPv6(r.logf) == nil
++@@ -1401,7 +1384,7 @@
++ // ipRules returns the appropriate list of ip rules to be used by Tailscale. See
++ // comments on baseIPRules and ubntIPRules for more details.
++ func ipRules() []netlink.Rule {
++-	if getDistroFunc() == distro.UBNT {
+++	if d := getDistroFunc(); d == distro.UBNT || d == distro.OpenWrt {
++ 		return ubntIPRules
++ 	}
++ 	return baseIPRules
++@@ -1451,6 +1434,9 @@
++ 				"ip", family.dashArg(),
++ 				"rule", "add",
++ 				"pref", strconv.Itoa(rule.Priority + r.ipPolicyPrefBase),
+++			}
+++			if rule.Invert {
+++				args = append(args, "not")
++ 			}
++ 			if rule.Mark != 0 {
++ 				if r.fwmaskWorks() {
++@@ -1696,39 +1682,6 @@
++ 	}
++ }
++ 
++-// Checks if the running openWRT system is using mwan3, based on the heuristic
++-// of the config file being present as well as a policy rule with a specific
++-// priority (2000 + 1 - first interface mwan3 manages) and non-zero mark.
++-func checkOpenWRTUsingMWAN3() (bool, error) {
++-	if getDistroFunc() != distro.OpenWrt {
++-		return false, nil
++-	}
++-
++-	if _, err := os.Stat("/etc/config/mwan3"); err != nil {
++-		if os.IsNotExist(err) {
++-			return false, nil
++-		}
++-		return false, err
++-	}
++-
++-	rules, err := netlink.RuleList(netlink.FAMILY_V4)
++-	if err != nil {
++-		return false, err
++-	}
++-	for _, r := range rules {
++-		// We want to match on a rule like this:
++-		//    2001:	from all fwmark 0x100/0x3f00 lookup 1
++-		//
++-		// We don't match on the mask because it can vary, or the
++-		// table because I'm not sure if it can vary.
++-		if r.Priority >= 2001 && r.Priority <= 2004 && r.Mark != 0 {
++-			return true, nil
++-		}
++-	}
++-
++-	return false, nil
++-}
++-
++ func nlAddrOfPrefix(p netip.Prefix) *netlink.Addr {
++ 	return &netlink.Addr{
++ 		IPNet: netipx.PrefixIPNet(p),

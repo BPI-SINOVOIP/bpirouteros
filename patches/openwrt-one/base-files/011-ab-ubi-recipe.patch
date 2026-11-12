@@ -13,8 +13,8 @@ same golden sysupgrade.itb, so first boot has both slots bootable. The kernel DT
 - Drop the `recovery` and `calibration` UBI volumes from UBINIZE_PARTS: the A/B
   defenv (z06) has no boot_recovery/boot_calibration, so these volumes were dead
   weight in the NAND image (recovery ~18MB every build). The NOR-side recovery is
-  unaffected — nor-factory.bin still ships the initramfs and the stock NOR u-boot
-  boots it. The NAND UBI now carries only what we use: fip, fit-a, fit-b,
+  changed separately by 015 and uboot z09: direct USB-to-NAND installation,
+  without a NOR initramfs. The NAND UBI now carries only what we use: fip, fit-a, fit-b,
   ubootenv/ubootenv2, rootfs_data.
 - ram-bl31-uboot.fip artifact: the provisioning u-boot variant (uboot z07 + the
   Makefile wiring in 012) packed into a fip; the flashkit ships it as the BROM

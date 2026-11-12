@@ -17,9 +17,10 @@ define Package/bpirouter-ui
   SECTION:=net
   CATEGORY:=Network
   TITLE:=BpiRouter Web Management UI
-# sqm-scripts is a product-wide backend capability. mwan3 remains selected by
-# the six board configs so its documented not-installed degradation stays
-# testable. EC200A-AU is a six-board USB Dongle candidate, including OpenWrt
+# sqm-scripts is a product-wide backend capability. bpirouter-base provides
+# the initial configuration and S2S denial rules, and requires mwan3 on all
+# seven SKUs. Missing-mwan3 behavior is exercised in isolated fixtures.
+# EC200A-AU is a seven-SKU USB Dongle candidate, including OpenWrt
 # One: own the option tty driver here instead of receiving it only by accident
 # through comgt-ncm on the five boards with modem slots.
 #
@@ -30,7 +31,7 @@ define Package/bpirouter-ui
 # boards with modem slots, while OpenWrt One (no slot, USB dongle only) selects
 # neither. Dropping this dependency is a separate change that has to be proven
 # per board against a real dial, not folded into the AT-ownership work.
-  DEPENDS:=+nginx-ssl +nginx-ssl-util +openssl-util +wireguard-tools +qrencode +jsonfilter +openvpn-openssl +uboot-envtools +lsblk +ddns-scripts +ddns-scripts-noip +ddns-scripts-cloudflare +sqm-scripts +comgt +kmod-usb-serial-option
+  DEPENDS:=+nginx-ssl +nginx-ssl-util +openssl-util +wireguard-tools +qrencode +jsonfilter +openvpn-openssl +uboot-envtools +lsblk +ddns-scripts +ddns-scripts-noip +ddns-scripts-cloudflare +sqm-scripts +comgt +kmod-usb-serial-option +tailscale +bpirouter-base
 endef
 
 define Package/bpirouter-ui/description
@@ -67,6 +68,7 @@ define Package/bpirouter-ui/install
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/init.d/bpirouter-api $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/init.d/bpirouter-cfg-recovery $(1)/etc/init.d/
+	$(INSTALL_BIN) ./files/init.d/bpirouter-vpn-prepare $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/init.d/bpirouter-ota-restore $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/init.d/bpirouter-bootok $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/init.d/bpirouter-reboot-worker $(1)/etc/init.d/

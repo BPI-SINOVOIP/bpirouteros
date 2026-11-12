@@ -1,0 +1,17 @@
+R4-Lite: pass the saved bootloader MAC to the LAN GMAC
+
+U-Boot's fdt_fixup_ethernet() uses ethernet0 to copy ethaddr into the
+Linux device tree. Without the alias, gmac0 falls back to a new random
+address despite an existing saved ethaddr. Keep the configured WAN MAC
+unchanged; this does not introduce a new address allocation policy.
+
+--- a/target/linux/mediatek/dts/mt7987a-bananapi-bpi-r4-lite.dts
++++ b/target/linux/mediatek/dts/mt7987a-bananapi-bpi-r4-lite.dts
+@@ -16,6 +16,7 @@
+ 		     "mediatek,mt7987a", "mediatek,mt7987";
+ 
+ 	aliases {
++		ethernet0 = &gmac0;
+ 		/* mt7987 I2C0 */
+ 		i2c0 = &i2c0;
+ 		/* PCA9548 (0-0070) provides 4 i2c channels */

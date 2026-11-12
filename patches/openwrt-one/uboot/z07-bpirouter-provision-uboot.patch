@@ -6,10 +6,14 @@ usb_recover), this one is ENV_IS_NOWHERE so it NEVER reads the (stock/foreign)
 NAND env and always runs its compiled provisioning env. On boot it auto-scans USB
 for snand-factory.bin, CRC-verifies it, writes the whole NAND, verifies the
 readback, and resets into the freshly-flashed firmware -- no button, no commands.
-While no/invalid USB image is present it blinks the red LED and re-scans every few
+While USB files cannot be read it blinks the red LED and re-scans every few
 seconds (Ctrl-C drops to the prompt; space stops the initial 3s autoboot).
+Once files are loaded, a CRC, erase, write or readback failure stops at the
+prompt. It never retries a destructive write automatically.
 make-flashkit ships this variant's fip as the BROM payload; the production u-boot
 keeps going into NAND.
+The NAND readback starts at 0x54000000, clear of the two 64 MiB FIT images
+loaded at 0x46000000. The old 0x4e000000 buffer overlapped larger factory images.
 new file mode 100644
 --- /dev/null
 +++ b/configs/mt7981_openwrt-one-ram_defconfig
@@ -152,8 +156,8 @@ new file mode 100644
 +bootfile_factory_crc=snand-factory.crc
 +usb_image=usb start ; if fatload usb 0 $loadaddr $bootfile_factory ; then setenv imgsz $filesize ; else usb reset ; if fatload usb 0 $loadaddr $bootfile_factory ; then setenv imgsz $filesize ; else setenv imgsz 0 ; fi ; fi ; test "$imgsz" != 0 && fatload usb 0 0x4f000000 $bootfile_factory_crc
 +verify_src=crc32 $loadaddr $imgsz 0x4f000004 && cmp.b 0x4f000000 0x4f000004 0x4
-+verify_nand=mtd read spi-nand0 0x4e000000 0x0 $imgsz && cmp.b $loadaddr 0x4e000000 $imgsz
++verify_nand=mtd read spi-nand0 0x54000000 0x0 $imgsz && cmp.b $loadaddr 0x54000000 $imgsz
 +flash_nand=led white on ; led green on ; led orange on ; run verify_src && mtd erase spi-nand0 && mtd write spi-nand0 $loadaddr 0x0 $imgsz && run verify_nand
-+provision=if run usb_image ; then if run flash_nand ; then led white off ; led orange off ; led green on ; echo "*** PROVISION OK - booting NAND ***" ; reset ; else led white off ; led green off ; led orange off ; echo "*** flash/verify FAILED - check USB image ***" ; fi ; fi
-+bootcmd=led green off ; led white off ; echo "*** provisioning: insert USB with snand-factory.bin (Ctrl-C for prompt) ***" ; while true ; do run provision ; led orange on ; sleep 1 ; led orange off ; sleep 2 ; done
++provision=if run flash_nand ; then led white off ; led orange off ; led green on ; echo "*** PROVISION OK - booting NAND ***" ; reset ; else led white off ; led green off ; led orange off ; echo "*** flash/verify FAILED - stopped; check the image and NAND before retrying ***" ; fi
++bootcmd=led green off ; led white off ; echo "*** provisioning: insert USB with snand-factory.bin (Ctrl-C for prompt) ***" ; until run usb_image ; do led orange on ; sleep 1 ; led orange off ; sleep 2 ; done ; run provision
 \ No newline at end of file

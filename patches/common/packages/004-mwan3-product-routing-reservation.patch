@@ -1,0 +1,188 @@
+diff --git a/net/mwan3/files/etc/init.d/mwan3 b/net/mwan3/files/etc/init.d/mwan3
+--- a/net/mwan3/files/etc/init.d/mwan3
++++ b/net/mwan3/files/etc/init.d/mwan3
+@@ -72,12 +72,18 @@
+ 			IP="$IP6"
+ 		fi
+ 
+-		for tid in $($IP route list table all | sed -ne 's/.*table \([0-9]\+\).*/\1/p' | sort -u); do
+-			[ $tid -gt $MWAN3_INTERFACE_MAX ] && continue
+-			$IP route flush table $tid &> /dev/null
++		# The current config may already be empty or have fewer members.
++		# Sweep the product reservation, not other applications' low tables.
++		tid=1
++		while [ "$tid" -le "$MWAN3_PRODUCT_MAX" ]; do
++			$IP route flush table "$tid" &> /dev/null
++			tid=$((tid+1))
+ 		done
+ 
+-		for rule in $($IP rule list | grep -E '^[1-3][0-9]{3}:' | cut -d ':' -f 1); do
++		for rule in $($IP rule list | awk -F : -v max="$MWAN3_PRODUCT_MAX" \
++			-v blackhole="$((MM_BLACKHOLE+2000))" -v unreachable="$((MM_UNREACHABLE+2000))" \
++			'($1 > 1000 && $1 < 4000 && $1 % 1000 >= 1 && $1 % 1000 <= max) ||
++			 $1 == blackhole || $1 == unreachable {print $1}'); do
+ 			$IP rule del pref $rule &> /dev/null
+ 		done
+ 		table="$($IPT -S)"
+diff --git a/net/mwan3/files/lib/mwan3/common.sh b/net/mwan3/files/lib/mwan3/common.sh
+--- a/net/mwan3/files/lib/mwan3/common.sh
++++ b/net/mwan3/files/lib/mwan3/common.sh
+@@ -9,6 +9,7 @@
+ MWAN3TRACK_STATUS_DIR="/var/run/mwan3track"
+ 
+ MWAN3_INTERFACE_MAX=""
++MWAN3_PRODUCT_MAX=8
+ 
+ MMX_MASK=""
+ MMX_DEFAULT=""
+@@ -155,11 +156,21 @@
+ 	esac
+ }
+ 
++mwan3_count_product_iface()
++{
++	product_iface_count=$((product_iface_count+1))
++}
++
+ mwan3_init()
+ {
+-	local bitcnt mmdefault source_routing
++	local bitcnt mmdefault source_routing product_iface_count=0
+ 
+ 	config_load mwan3
++	config_foreach mwan3_count_product_iface interface
++	if [ "$product_iface_count" -gt "$MWAN3_PRODUCT_MAX" ]; then
++		LOG err "Interface count exceeds the product routing-table reservation; configuration preserved"
++		exit 1
++	fi
+ 
+ 	[ -d $MWAN3_STATUS_DIR ] || mkdir -p $MWAN3_STATUS_DIR/iface_state
+ 	[ -d "$MWAN3_STATUS_IPTABLES_LOG_DIR" ] || mkdir -p "$MWAN3_STATUS_IPTABLES_LOG_DIR"
+diff --git a/net/mwan3/files/lib/mwan3/mwan3.sh b/net/mwan3/files/lib/mwan3/mwan3.sh
+--- a/net/mwan3/files/lib/mwan3/mwan3.sh
++++ b/net/mwan3/files/lib/mwan3/mwan3.sh
+@@ -364,6 +364,7 @@
+ 	mwan3_get_iface_id id "$1"
+ 
+ 	[ -n "$id" ] || return 0
++	[ "$id" -ge 1 ] && [ "$id" -le "$MWAN3_PRODUCT_MAX" ] || return 1
+ 
+ 	if [ "$family" = "ipv4" ]; then
+ 		IPT="$IPT4"
+@@ -466,6 +467,7 @@
+ 	mwan3_get_iface_id id "$1"
+ 
+ 	[ -n "$id" ] || return 0
++	[ "$id" -ge 1 ] && [ "$id" -le "$MWAN3_PRODUCT_MAX" ] || return 1
+ 
+ 	if [ "$family" = "ipv4" ]; then
+ 		IP="$IP4"
+@@ -500,6 +502,7 @@
+ 		LOG warn "delete_iface_route: could not find table id for interface $1"
+ 		return 0
+ 	fi
++	[ "$id" -ge 1 ] && [ "$id" -le "$MWAN3_PRODUCT_MAX" ] || return 1
+ 
+ 	if [ "$family" = "ipv4" ]; then
+ 		$IP4 route flush table "$id"
+@@ -516,6 +519,7 @@
+ 	mwan3_get_iface_id id "$1"
+ 
+ 	[ -n "$id" ] || return 0
++	[ "$id" -ge 1 ] && [ "$id" -le "$MWAN3_PRODUCT_MAX" ] || return 1
+ 
+ 	if [ "$family" = "ipv4" ]; then
+ 		IP="$IP4"
+@@ -540,6 +544,7 @@
+ 	mwan3_get_iface_id id "$1"
+ 
+ 	[ -n "$id" ] || return 0
++	[ "$id" -ge 1 ] && [ "$id" -le "$MWAN3_PRODUCT_MAX" ] || return 1
+ 
+ 	if [ "$family" = "ipv4" ]; then
+ 		IP="$IP4"
+@@ -549,7 +554,7 @@
+ 		return
+ 	fi
+ 
+-	for rule_id in $(ip rule list | awk -F : '$1 % 1000 == '$id' && $1 > 1000 && $1 < 4000 {print $1}'); do
++	for rule_id in $($IP rule list | awk -F : -v id="$id" '$1 == 1000+id || $1 == 2000+id || $1 == 3000+id {print $1}'); do
+ 		$IP rule del pref $rule_id
+ 	done
+ }
+diff --git a/net/mwan3/files/usr/sbin/mwan3rtmon b/net/mwan3/files/usr/sbin/mwan3rtmon
+--- a/net/mwan3/files/usr/sbin/mwan3rtmon
++++ b/net/mwan3/files/usr/sbin/mwan3rtmon
+@@ -19,6 +19,27 @@
+ 	kill -${1} ${2} 2>/dev/null
+ }
+ 
++mwan3_rtmon_update()
++(
++	# Share the init/hotplug lock only for this synchronous update. A queued
++	# old monitor must reload configuration after stop has cleared its tables.
++	exec 9>/var/lock/procd_mwan3.lock
++	flock -x 9 || return 1
++	[ -d "$MWAN3_STATUS_DIR" ] || return 1
++	case "$1" in
++		ipv4) $IPT4 -S mwan3_hook >/dev/null 2>&1 || return 1 ;;
++		ipv6) $IPT6 -S mwan3_hook >/dev/null 2>&1 || return 1 ;;
++		*) return 1 ;;
++	esac
++	mwan3_init
++	if [ "$#" -eq 1 ]; then
++		mwan3_set_connected_${1}
++		mwan3_add_all_routes "$1"
++	else
++		mwan3_rtmon_route_handle "$2" "$1"
++	fi
++)
++
+ mwan3_add_all_routes()
+ {
+ 	local tid IP IPT route_line family active_tbls tid initial_state error
+@@ -27,6 +48,9 @@
+ 	add_active_tbls()
+ 	{
+ 		let tid++
++		local enabled
++		config_get_bool enabled "$1" enabled 0
++		[ "$enabled" -eq 1 ] || return
+ 		config_get family "$1" family ipv4
+ 		config_get initial_state "$1" initial_state "online"
+ 		[ "$family" != "$ipv" ] && return
+@@ -129,6 +153,9 @@
+ 	handle_route_cb(){
+ 		local iface=$1
+ 		let tid++
++		local enabled
++		config_get_bool enabled "$iface" enabled 0
++		[ "$enabled" -eq 1 ] || return
+ 		config_get family "$iface" family ipv4
+ 		[ "$family" != "$route_family" ] && return
+ 		handle_route "$iface"
+@@ -150,8 +177,6 @@
+ main()
+ {
+ 	local IP family
+-
+-	mwan3_init
+ 
+ 	family=$1
+ 	[ -z $family ] && family=ipv4
+@@ -171,13 +196,12 @@
+ 		while IFS='' read -r line; do
+ 			[ -z "${line##*table*}" ] && continue
+ 			LOG debug "handling route update $family '$line'"
+-			mwan3_rtmon_route_handle "$line" "$family"
++			mwan3_rtmon_update "$family" "$line"
+ 		done
+ 	} &
+ 	child=$!
+ 	trap_with_arg func_trap "$child" SIGINT SIGTERM SIGKILL
+-	mwan3_set_connected_${family}
+-	mwan3_add_all_routes ${family}
++	mwan3_rtmon_update "$family"
+ 	kill -SIGCONT $child
+ 	wait $child
+ }

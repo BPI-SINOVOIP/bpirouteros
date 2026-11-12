@@ -28,7 +28,7 @@ def boards(release):
 
 class RCReleaseTest(unittest.TestCase):
     def test_seven_sku_lock_collection_manifest_and_public_tree(self):
-        for release in ('v1.5.0-rc999', 'v1.5.0'):
+        for release in ('v1.5.0-rc999', 'v1.5.0', 'v1.6.0-rc999', 'v1.6.0'):
             with self.subTest(release=release):
                 self.check_seven_sku_pipeline(release)
 
@@ -207,6 +207,9 @@ class RCReleaseTest(unittest.TestCase):
                           'test-offload-disabled.sh', 'test-owned-configs.sh',
                           'test-factory-reset-rootfs.sh', 'test-rootfs-integrity.sh')
             other_gates = ('test-mwan3-route-delete-order.sh', 'test-mwan3-dynamic-child.sh',
+                           'test-mwan3-routing-reservation.py',
+                           'test-s2s-reprepare.py',
+                           'test-tailscale-product-service.py',
                            'test-cellular-package-scope.sh',
                            'test-cellular-netifd-lifecycle.sh', 'test-netifd-dynamic-ip6assign.sh',
                            'test-netifd-proto-busy.sh', 'test-kernel-patch-routing.sh',
@@ -246,12 +249,12 @@ class RCReleaseTest(unittest.TestCase):
             # A recorded lock still has to describe this tree. Neither dropping
             # the lock nor using an incomplete/older board set may admit 4E.
             original_lock = json.loads(public_lock.read_text())
-            for release_id in ('v1.5.0', 'v1.4.9-rc1'):
+            for release_id in ('v1.5.0', 'v1.6.0', 'v1.4.9-rc1'):
                 public_lock.write_text(json.dumps(dict(original_lock, release=release_id,
                                                         boards=sorted(STABLE), ui_artifacts=[])))
                 result = subprocess.run(command, env=env, capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
-                if release_id == 'v1.5.0':
+                if release_id in ('v1.5.0', 'v1.6.0'):
                     self.assertIn('input lock must name exactly', result.stdout + result.stderr)
                 else:
                     self.assertIn('requires a development-bound prepare', result.stderr)
@@ -267,32 +270,43 @@ class RCReleaseTest(unittest.TestCase):
             self.assertIn('config changed since the lock', result.stderr)
             self.assertEqual(calls.read_text().splitlines(), list(feed_gates))
 
-    def test_v15_selects_exactly_seven_skus_without_changing_older_releases(self):
-        self.assertEqual(set(boards('v1.5.0-rc1')), RC)
-        self.assertEqual(set(boards('v1.5.0-rc12')), RC)
-        self.assertEqual(set(boards('v1.5.0')), RC)
-        for release in ('', 'v1.4.9', 'v1.4.9-rc1', 'v1.5.0-rc', 'v1.5.0-rc0'):
-            self.assertEqual(set(boards(release)), STABLE)
+    def test_v15_v16_select_seven_skus_without_changing_other_releases(self):
+        for release in ('v1.5.0-rc1', 'v1.5.0-rc12', 'v1.5.0',
+                        'v1.6.0-rc1', 'v1.6.0-rc12', 'v1.6.0'):
+            with self.subTest(release=release):
+                selected = boards(release)
+                self.assertEqual(set(selected), RC)
+                self.assertEqual(len(selected), 7)
+        for release in ('', 'v1.4.9', 'v1.4.9-rc1', 'v1.5.1', 'v1.7.0',
+                        'v1.5.0-rc', 'v1.5.0-rc0', 'v1.6.0-rc', 'v1.6.0-rc0',
+                        'v1.6.0-rc01', 'v1.6.0-rc1-extra', 'v1.6.0-extra'):
+            with self.subTest(release=release):
+                self.assertEqual(set(boards(release)), STABLE)
 
     def test_rc_does_not_latch_admission(self):
-        result = subprocess.check_output(['bash', '-c',
-            'source "$1"; bpir_select_release_boards v1.5.0-rc1; '
-            'bpir_select_release_boards v1.4.9; echo "$VALID_BOARDS"',
-            'boards', str(SCRIPTS / 'boards.sh')], text=True)
-        self.assertEqual(set(result.split()), STABLE)
+        for release in ('v1.5.0-rc1', 'v1.6.0-rc1', 'v1.6.0'):
+            with self.subTest(release=release):
+                result = subprocess.check_output(['bash', '-c',
+                    'source "$1"; bpir_select_release_boards "$2"; '
+                    'bpir_select_release_boards v1.4.9; echo "$VALID_BOARDS"',
+                    'boards', str(SCRIPTS / 'boards.sh'), release], text=True)
+                self.assertEqual(set(result.split()), STABLE)
 
     def test_rc_requires_all_seven_and_matching_ui_version(self):
-        expected = boards('v1.5.0-rc1')
-        data = {'schema': 1, 'release': 'v1.5.0-rc1', 'boards': expected,
-                'downloads_lock_sha256': '0' * 64,
-                'ui_artifacts': [{'name': 'bpirouter-ui', 'version': '1.5.0_rc1-r1'}]}
-        contract.validate_input(data, expected)
-        for subset in (sorted(STABLE), ['bpi-r4-pro'], expected + ['bpi-r4-pro']):
-            with self.assertRaises(SystemExit):
-                contract.validate_input(dict(data, boards=subset), expected)
-        data['ui_artifacts'][0]['version'] = '1.5.0-r1'
-        with self.assertRaises(SystemExit):
+        for release, version, wrong in (('v1.5.0-rc1', '1.5.0_rc1-r1', '1.5.0-r1'),
+                                         ('v1.6.0-rc1', '1.6.0_rc1-r1', '1.6.0-r1'),
+                                         ('v1.6.0', '1.6.0-r1', '1.6.0_rc1-r1')):
+            expected = boards(release)
+            data = {'schema': 1, 'release': release, 'boards': expected,
+                    'downloads_lock_sha256': '0' * 64,
+                    'ui_artifacts': [{'name': 'bpirouter-ui', 'version': version}]}
             contract.validate_input(data, expected)
+            for subset in (sorted(STABLE), ['bpi-r4-pro'], expected + ['bpi-r4-pro']):
+                with self.subTest(release=release, subset=subset), self.assertRaises(SystemExit):
+                    contract.validate_input(dict(data, boards=subset), expected)
+            data['ui_artifacts'][0]['version'] = wrong
+            with self.subTest(release=release, wrong_version=wrong), self.assertRaises(SystemExit):
+                contract.validate_input(data, expected)
 
     def test_4e_keeps_its_own_artifacts_with_ab_execution_enabled(self):
         result = subprocess.check_output(['bash', '-c',
@@ -317,7 +331,8 @@ class RCReleaseTest(unittest.TestCase):
                        BPIR_RELEASE_LOCK=str(lock), BPIR_TEST_AFTER_OPENWRT_LOCK=str(reached))
             # The existing pre-mutation seam exits 99. This is only a dispatch
             # test, not a validated release lock or a firmware build.
-            for release, expected in [('v1.4.9-rc1', 1), ('v1.5.0-rc1', 99)]:
+            for release, expected in [('v1.4.9-rc1', 1), ('v1.5.0-rc1', 99),
+                                      ('v1.6.0-rc1', 99), ('v1.6.0', 99)]:
                 lock.write_text(json.dumps({'release': release}))
                 result = subprocess.run(['bash', str(SCRIPTS / 'prepare.sh'), '--board',
                                          'bpi-r4-pro-4e', '--without-proprietary-ui'],

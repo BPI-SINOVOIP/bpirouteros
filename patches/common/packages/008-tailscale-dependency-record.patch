@@ -1,0 +1,17 @@
+--- a/net/tailscale/Makefile
++++ b/net/tailscale/Makefile
+@@ -60,6 +60,14 @@ define Package/tailscale/install
+ 	$(LN) tailscaled $(1)/usr/sbin/tailscale
+ 	$(INSTALL_BIN) ./files//tailscale.init $(1)/etc/init.d/tailscale
+ 	$(INSTALL_DATA) ./files//tailscale.conf $(1)/etc/config/tailscale
++	$(INSTALL_DIR) $(1)/usr/share/tailscale
++	$(INSTALL_DATA) $(PKG_BUILD_DIR)/LICENSE $(PKG_BUILD_DIR)/licenses/tailscale.md $(1)/usr/share/tailscale/
++	$(INSTALL_DATA) $(PKG_BUILD_DIR)/go.mod $(PKG_BUILD_DIR)/go.sum $(1)/usr/share/tailscale/
++	$(STAGING_DIR_HOSTPKG)/lib/go-$(GO_HOST_VERSION)/bin/go version -m $(GO_PKG_BUILD_BIN_DIR)/tailscaled > $(PKG_BUILD_DIR)/tailscaled.buildinfo
++	sed -n '/^[[:space:]]dep[[:space:]]/p; /^[[:space:]]=>[[:space:]]/p' $(PKG_BUILD_DIR)/tailscaled.buildinfo > $(1)/usr/share/tailscale/modules.txt
++	test -s $(1)/usr/share/tailscale/modules.txt
++	chmod 0644 $(1)/usr/share/tailscale/modules.txt
++	rm -f $(PKG_BUILD_DIR)/tailscaled.buildinfo
+ endef
+ 
+ $(eval $(call BuildPackage,tailscale))

@@ -1,0 +1,37 @@
+diff --git a/package/network/config/netifd/patches/904-bpirouter-pppoe-parent-mtu.patch b/package/network/config/netifd/patches/904-bpirouter-pppoe-parent-mtu.patch
+new file mode 100644
+--- /dev/null
++++ b/package/network/config/netifd/patches/904-bpirouter-pppoe-parent-mtu.patch
+@@ -0,0 +1,32 @@
++--- a/interface.c
+++++ b/interface.c
++@@ -629,14 +629,29 @@
++ static void
++ interface_set_device_config(struct interface *iface, struct device *dev)
++ {
+++	struct blob_buf config = {};
+++	struct blob_attr *cur;
+++	size_t rem;
+++
++ 	if (!dev || !dev->default_config)
++ 		return;
++ 
++ 	if (!iface->device_config &&
++ 	    (!dev->iface_config || dev->config_iface != iface))
++ 		return;
++ 
++ 	dev->config_iface = iface;
++ 	dev->iface_config = iface->device_config;
+++	/* The PPP MTU includes IP, not the PPPoE Ethernet encapsulation. */
+++	if (iface->proto_handler && !strcmp(iface->proto_handler->name, "pppoe")) {
+++		blob_buf_init(&config, 0);
+++		blobmsg_for_each_attr(cur, iface->config, rem) {
+++			if (strcmp(blobmsg_name(cur), "mtu"))
+++				blobmsg_add_blob(&config, cur);
+++		}
+++		device_apply_config(dev, dev->type, config.head);
+++		blob_buf_free(&config);
+++		return;
+++	}
++ 	device_apply_config(dev, dev->type, iface->config);
++ }

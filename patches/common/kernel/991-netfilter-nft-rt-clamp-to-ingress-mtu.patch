@@ -1,0 +1,37 @@
+netfilter: nft_rt: bound TCP MSS by the ingress link MTU
+
+A forwarded reply can have a different reverse policy route from the
+unmarked lookup in get_tcpmss(). With a 1400-byte USB WAN selected by
+mwan3 and a 1500-byte main default, the reply's LAN destination and the
+reverse lookup both report 1500, leaving its advertised MSS too large.
+Copying skb->mark is insufficient: mwan3 can replace it with its default
+mark for a connected LAN destination.
+
+Also bound MSS by the actual ingress link. Keep the existing forward and
+reverse route limits, including any smaller path MTU. Evaluations without
+an ingress device retain their existing behavior. Forwarded postrouting
+packets can retain an ingress device and receive the additional limit too.
+Use the device supplied by the hook, not skb->dev, which may already refer
+to an output device.
+
+--- a/net/netfilter/nft_rt.c
++++ b/net/netfilter/nft_rt.c
+@@ -22,6 +22,7 @@
+ {
+ 	u32 minlen = sizeof(struct ipv6hdr), mtu = dst_mtu(skbdst);
+ 	const struct sk_buff *skb = pkt->skb;
++	const struct net_device *in = nft_in(pkt);
+ 	struct dst_entry *dst = NULL;
+ 	struct flowi fl;
+ 
+@@ -44,6 +45,10 @@
+ 		dst_release(dst);
+ 	}
+ 
++	/* The unmarked reverse lookup may use a different uplink. */
++	if (in)
++		mtu = min_t(u32, mtu, READ_ONCE(in->mtu));
++
+ 	if (mtu <= minlen || mtu > 0xffff)
+ 		return TCP_MSS_DEFAULT;
+ 

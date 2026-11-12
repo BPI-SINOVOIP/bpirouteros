@@ -195,7 +195,7 @@ entry_refusal() {
 
 entry_refusal prepare.sh --board bpi-r4-pro-4e --without-proprietary-ui
 entry_refusal build-full.sh --board bpi-r4-pro-4e
-entry_refusal build-image.sh --board bpi-r4-pro-4e
+entry_refusal build-image.sh --board bpi-r4-pro-4e --release
 ok "prepare, build-full and build-image each refuse 4E with the reason"
 
 echo "PASS: R4-Pro two-SKU identity, artifact SKU tagging and fail-closed board dispatch"

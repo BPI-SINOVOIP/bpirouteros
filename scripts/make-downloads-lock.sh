@@ -4,8 +4,10 @@
 # Usage: make-downloads-lock.sh --cache <dir> --tree <openwrt> --release <vX.Y.Z>
 #                               --output <file> [--source-cache <dir>]
 #
-# Input is what collect-source-cache.sh produced: one manifest per board and the
-# V=s log of the download that produced it. Provenance is read out of those logs
+# Input is what collect-source-cache.sh produced: one manifest per board and
+# the V=s log of make download. This is not an offline build dependency lock;
+# Go module constraints and linked dependencies are recorded with Tailscale.
+# Provenance is read out of those logs
 # rather than out of Makefiles, because the log records the call that actually
 # fetched the file -- filename, the hash OpenWrt required, and the upstream URLs
 # it was given:

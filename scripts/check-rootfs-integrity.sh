@@ -35,8 +35,12 @@ fi
 # ── 1. Boot order and payload ────────────────────────────────────────────────
 
 for file in \
+	etc/config/bpirouter etc/config/tailscale \
+	etc/init.d/tailscale usr/sbin/tailscaled \
+	usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft \
 	etc/init.d/boot etc/init.d/firewall etc/init.d/mwan3 etc/init.d/network \
 	etc/init.d/bpirouter-api etc/init.d/bpirouter-cfg-recovery \
+	etc/init.d/bpirouter-vpn-prepare usr/bin/bpirouter-apid \
 	etc/init.d/bpirouter-ota-restore usr/libexec/bpirouter-ota-restore \
 	etc/uci-defaults/11-bpirouter-mwan3-canonical \
 	etc/uci-defaults/12-bpirouter-sqm-canonical \
@@ -45,8 +49,17 @@ for file in \
 	usr/libexec/bpirouter-sqm-strict.awk; do
 	[ -f "$ROOT/$file" ] || fail "missing /$file"
 done
-for file in etc/init.d/bpirouter-ota-restore usr/libexec/bpirouter-ota-restore; do
+for file in LICENSE tailscale.md go.mod go.sum modules.txt; do
+	[ -s "$ROOT/usr/share/tailscale/$file" ] || fail "missing Tailscale dependency record /usr/share/tailscale/$file"
+done
+for file in etc/init.d/bpirouter-ota-restore usr/libexec/bpirouter-ota-restore \
+	etc/init.d/tailscale usr/sbin/tailscaled; do
 	[ -x "$ROOT/$file" ] || fail "/$file is not executable"
+done
+for entry in '/usr/bin/bpirouter-apid --s2s-service=check' \
+	'procd_set_param command /usr/bin/bpirouter-apid --s2s-service=run'; do
+	grep -Fq -- "$entry" "$ROOT/etc/init.d/tailscale" ||
+		fail "tailscale init does not use the product lifecycle"
 done
 
 [ ! -e "$ROOT/etc/uci-defaults/10-bpirouter-ota-restore" ] &&
@@ -91,6 +104,7 @@ start_of() { sed -n 's/^START=//p' "$ROOT/etc/init.d/$1" | head -1; }
 [ "$(start_of boot)" = 10 ] || fail "boot is not START=10"
 [ "$(start_of bpirouter-ota-restore)" = 10 ] || fail "OTA restore is not START=10"
 [ "$(start_of bpirouter-cfg-recovery)" = 11 ] || fail "config generation recovery is not START=11"
+[ "$(start_of bpirouter-vpn-prepare)" = 18 ] || fail "VPN preparation is not START=18"
 [ "$(start_of firewall)" = 19 ] || fail "firewall is not START=19"
 [ "$(start_of mwan3)" = 19 ] || fail "mwan3 is not START=19"
 [ "$(start_of network)" = 20 ] || fail "network is not START=20"
@@ -107,10 +121,20 @@ check_link() {
 check_link S10boot boot
 check_link S10bpirouter-ota-restore bpirouter-ota-restore
 check_link S11bpirouter-cfg-recovery bpirouter-cfg-recovery
+check_link S18bpirouter-vpn-prepare bpirouter-vpn-prepare
 check_link S19firewall firewall
 check_link S19mwan3 mwan3
 check_link S20network network
 check_link S99bpirouter-api bpirouter-api
+
+[ -x "$ROOT/usr/bin/bpirouter-apid" ] || fail "apid is not executable"
+grep -aFq -- 'prepare-vpn-firewall' "$ROOT/usr/bin/bpirouter-apid" ||
+	fail "apid lacks the VPN preparation entry point"
+vpn_prepare=$ROOT/etc/init.d/bpirouter-vpn-prepare
+grep -Fq 'PROG=${BPIR_VPN_PREPARE_PROG:-/usr/bin/bpirouter-apid}' "$vpn_prepare" ||
+	fail "VPN preparation does not select apid"
+grep -Fq '"$PROG" --prepare-vpn-firewall || logger' "$vpn_prepare" ||
+	fail "VPN preparation does not invoke the preparation entry point with a diagnostic"
 
 ota_restore_init=$ROOT/etc/init.d/bpirouter-ota-restore
 grep -Fq 'PROG=${BPIR_OTA_RESTORE_PROG:-/usr/libexec/bpirouter-ota-restore}' "$ota_restore_init" ||

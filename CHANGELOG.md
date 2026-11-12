@@ -7,6 +7,117 @@ and installation instructions, see the [feature guide](FEATURES.md) and
 For the purpose, board scope and origin of the current patch groups, see the
 [patch guide](PATCHES.md).
 
+## v1.6.0
+
+### Supported hardware
+
+- BPI-R3
+- BPI-R3-Mini
+- BPI-R4
+- BPI-R4-Lite
+- BPI-R4-Pro 8X
+- BPI-R4-Pro 4E
+- OpenWrt One
+
+R4-Pro 8X and 4E require different images. Always select the exact board model.
+
+### Release highlights
+
+- Remote networking with Tailscale (Tailscale 1.98.3, official coordination
+  service) on all seven models: devices behind two BpiRouters can reach each
+  other, and Tailscale clients can reach devices behind a BpiRouter while away.
+  Remote networking, network sharing and remote web management are off by
+  default; only selected networks behind BpiRouter are shared.
+- A warning when a WAN connection's firewall zone membership differs from its
+  configuration.
+- Per-device DNS servers apply without a static address reservation and can
+  no longer be bypassed through the router's IPv6 DNS.
+- TCP MSS and PPPoE MTU corrections on WAN connections.
+- A new OpenWrt One storage layout with larger firmware slots, keeping A/B
+  recovery.
+
+### Public-source changes since v1.5.0
+
+#### Remote networking
+
+- Add the Tailscale package integration used by remote networking: policy
+  routing that coexists with Multi-WAN, a product-managed service, clearing of
+  an explicitly empty exit-node setting, local key-expiry reporting, and a
+  build without the peer API server, Wake-on-LAN and exit-node advertisement.
+- Record Tailscale's upstream module constraints, linked module versions and
+  licence notices in the firmware under `/usr/share/tailscale/`.
+- Run the product's remote-networking firewall check before each firewall
+  start or reload, and keep the default-deny table in place when that check
+  cannot be completed.
+- Limit Multi-WAN's routing-table cleanup to its own reserved tables so other
+  services' policy routing tables are not removed.
+
+#### Network fixes
+
+- Bound the TCP MSS of forwarded traffic by the ingress link MTU, so replies
+  over a smaller-MTU WAN selected by Multi-WAN advertise a correct MSS.
+- Apply a PPPoE interface's MTU setting to the PPP link only, not to its parent
+  Ethernet device, whose MTU must also carry the PPPoE encapsulation.
+- Pass the saved bootloader MAC address to the R4-Lite LAN interface instead
+  of a random address on each boot.
+- Correct the kernel log message that reports a randomly assigned MediaTek
+  Ethernet MAC address.
+
+#### OpenWrt One
+
+- Move to a new A/B layout with larger UBI firmware volumes, and reject
+  over-the-air updates between the v1.5 and v1.6 layouts.
+- Use the NOR U-Boot as a button-gated USB-to-NAND installer, and publish only
+  the separate NOR boot firmware rather than a whole-NOR factory image.
+- Stop the installers when a NAND erase operation fails instead of continuing
+  or reporting success.
+- Update the One boot environment and provisioning U-Boot for the new layout.
+
+#### Build and delivery
+
+- Add [third-party notices](proprietary-artifacts/THIRD_PARTY_NOTICES.md) for
+  the components contained in the precompiled UI/APID package.
+- Add host regression checks for the changes above; they use BusyBox `ash`
+  (set `BUSYBOX` if it is outside `PATH`).
+- The public source lock is the firmware input lock for this release; the
+  separate original-firmware lock used for v1.5.0's revised sources is no
+  longer present.
+
+### UI and API package
+
+The supplied precompiled UI/APID package is updated to v1.6.0. It includes the
+management interface and API used by the firmware, including remote networking.
+The installed product version is visible in **Home → System** and at the top of
+**System**.
+
+This repository provides that package as a binary; it does not include the
+private UI/APID source. See [licensing information](LICENSING.md) for the
+applicable terms.
+
+### Installation and usage notes
+
+- OpenWrt One cannot be updated in place from v1.5. Back up settings and
+  reinstall with the v1.6 One flashkit and its serial (UART) loader; the old
+  reset-button USB restore cannot perform this migration.
+- The other six models update from v1.5 with the exact model's sysupgrade
+  image in **System → Firmware**; confirm the firmware trial after checking
+  access and connectivity.
+- v1.6 supports at most eight Multi-WAN interfaces, including disabled ones.
+  Keeping settings or restoring a v1.5 backup can exceed this; the feature
+  guide describes **Reset Multi-WAN and reboot**.
+- Remote networking shares IPv4 local networks only, without remote DNS,
+  MagicDNS or an exit node. Shared networks must not overlap the other site's
+  LAN, Guest or IoT networks.
+- `apk update` reports an error for the unpublished `bpirouter` package feed
+  listed in the firmware. Comment out the line containing `/bpirouter/` in
+  `/etc/apk/repositories.d/distfeeds.list` until a later release fixes it.
+- The R4-Pro media, USB, mobile, Multi-WAN and bandwidth notes listed under
+  v1.5.0 still apply.
+
+For full details, see [Features](FEATURES.md),
+[Features in Chinese](FEATURES.zh-CN.md), [Installation](INSTALLATION.md) and
+[Installation in Chinese](INSTALLATION.zh-CN.md).
+
 ## v1.5.0
 
 ### Supported hardware

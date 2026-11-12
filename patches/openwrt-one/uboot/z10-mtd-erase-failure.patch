@@ -1,0 +1,30 @@
+Stop One's installers when an actual NAND erase operation fails.
+
+Normal erase skips known bad blocks before mtd_erase(). A new -EIO from
+that operation is an erase failure, not a successful skip. Propagate it so
+the NOR, NAND and UART installers do not continue writing or report success.
+In particular, their image readback cannot detect an unerased block beyond
+the image length. Keep normal bad-block handling and other boards unchanged.
+Preserve upstream -EIO handling for explicit manual erase.dontskipbad;
+none of the product installers uses that mode.
+
+--- a/cmd/mtd.c
++++ b/cmd/mtd.c
+@@ -689,7 +689,7 @@
+ 		}
+ 
+ 		ret = mtd_erase(mtd, &erase_op);
+-		if (ret && ret != -EIO)
++		if (ret && (ret != -EIO || !scrub))
+ 			break;
+ 
+ 		len -= mtd->erasesize;
+@@ -700,7 +700,7 @@
+ 
+ 	led_activity_off();
+ 
+-	if (ret && ret != -EIO)
++	if (ret && (ret != -EIO || !scrub))
+ 		ret = CMD_RET_FAILURE;
+ 	else
+ 		ret = CMD_RET_SUCCESS;

@@ -1,0 +1,75 @@
+diff --git a/net/tailscale/patches/102-self-key-expiry-status.patch b/net/tailscale/patches/102-self-key-expiry-status.patch
+new file mode 100644
+--- /dev/null
++++ b/net/tailscale/patches/102-self-key-expiry-status.patch
+@@ -0,0 +1,70 @@
++Report the existing local key-expiry decision for Self as well as the
++control-supplied flag. NeedsLogin alone is not evidence of key expiry.
++
++--- a/ipn/ipnlocal/local.go
+++++ b/ipn/ipnlocal/local.go
++@@ -1405,6 +1405,7 @@
++ 			ss.UserID = nm.User()
++ 			if sn := nm.SelfNode; sn.Valid() {
++ 				peerStatusFromNode(ss, sn)
+++				ss.Expired = ss.Expired || b.keyExpired
++ 				if cm := sn.CapMap(); cm.Len() > 0 {
++ 					ss.Capabilities = make([]tailcfg.NodeCapability, 1, cm.Len()+1)
++ 					ss.Capabilities[0] = "HTTPS://TAILSCALE.COM/s/DEPRECATED-NODE-CAPS#see-https://github.com/tailscale/tailscale/issues/11508"
++--- a/ipn/ipnlocal/state_test.go
+++++ b/ipn/ipnlocal/state_test.go
++@@ -5,6 +5,7 @@
++ 
++ import (
++ 	"context"
+++	"encoding/json"
++ 	"errors"
++ 	"fmt"
++ 	"math/rand/v2"
++@@ -393,6 +394,22 @@
++ 		t.Fatalf("NewLocalBackend: %v", err)
++ 	}
++ 	t.Cleanup(b.Shutdown)
+++	assertSelfExpired := func(want bool) {
+++		t.Helper()
+++		raw, err := json.Marshal(b.Status())
+++		c.Assert(err, qt.IsNil)
+++		var status struct {
+++			Self *struct{ Expired *bool }
+++		}
+++		c.Assert(json.Unmarshal(raw, &status), qt.IsNil)
+++		c.Assert(status.Self, qt.IsNotNil)
+++		if want {
+++			c.Assert(status.Self.Expired, qt.IsNotNil)
+++			c.Assert(*status.Self.Expired, qt.IsTrue)
+++		} else {
+++			c.Assert(status.Self.Expired, qt.IsNil)
+++		}
+++	}
++ 
++ 	var cc, previousCC *mockControl
++ 	b.SetControlClientGetterForTesting(func(opts controlclient.Options) (controlclient.Client, error) {
++@@ -448,6 +465,7 @@
++ 		// Verify the actual facts about our state
++ 		c.Assert(needsLogin(b), qt.IsTrue)
++ 		c.Assert(hasValidNetMap(b), qt.IsFalse)
+++		assertSelfExpired(false)
++ 	}
++ 
++ 	// Restart the state machine.
++@@ -1021,6 +1039,7 @@
++ 		// Verify key expired, need new login using backend state
++ 		c.Assert(needsLogin(b), qt.IsTrue)
++ 		c.Assert(b.isEngineBlocked(), qt.IsTrue)
+++		assertSelfExpired(true)
++ 	}
++ 
++ 	t.Logf("\n\nExtendKey")
++@@ -1040,6 +1059,7 @@
++ 		c.Assert(isFullyAuthenticated(b), qt.IsTrue)
++ 		c.Assert(hasValidNetMap(b), qt.IsTrue)
++ 		c.Assert(b.isEngineBlocked(), qt.IsFalse)
+++		assertSelfExpired(false)
++ 	}
++ 	notifies.expect(1)
++ 	// Fake a DERP connection.

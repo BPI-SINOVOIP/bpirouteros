@@ -1,0 +1,32 @@
+Only publish the separate NOR boot firmware, never a whole-NOR factory image.
+
+The NOR U-Boot installs NAND directly from USB; it no longer boots initramfs.
+Keep factory/calibration data on each device untouched. Bound the two boot
+artifacts to their existing partition sizes without moving any partitions.
+
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -2466,9 +2466,9 @@
+   ARTIFACTS := \
+ 	nor-preloader.bin nor-bl31-uboot.fip \
+ 	snand-preloader.bin snand-bl31-uboot.fip ram-bl31-uboot.fip \
+-	factory.ubi snand-factory.bin nor-factory.bin
+-  ARTIFACT/nor-preloader.bin		:= mt7981-bl2 nor-ddr4
+-  ARTIFACT/nor-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-nor
++	factory.ubi snand-factory.bin
++  ARTIFACT/nor-preloader.bin		:= mt7981-bl2 nor-ddr4 | check-size 256k
++  ARTIFACT/nor-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-nor | check-size 512k
+   ARTIFACT/snand-preloader.bin		:= mt7981-bl2 spim-nand-ubi-ddr4
+   ARTIFACT/snand-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-snand
+   ARTIFACT/ram-bl31-uboot.fip		:= mt7981-bl31-uboot openwrt_one-ram
+@@ -2479,10 +2479,6 @@
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 768k | \
+ 					   mt7981-bl2 spim-nand-ubi-ddr4 | pad-to 1024k | \
+ 					   ubinize-image fit-a squashfs-sysupgrade.itb 64
+-  ARTIFACT/nor-factory.bin		:= mt7981-bl2 nor-ddr4 | pad-to 256k | \
+-					   append-openwrt-one-eeprom | pad-to 1024k | \
+-					   mt7981-bl31-uboot openwrt_one-nor | pad-to 512k | \
+-					   append-image-stage initramfs.itb
+   UBINIZE_OPTS := -E 5
+   BLOCKSIZE := 128k
+   PAGESIZE := 2048

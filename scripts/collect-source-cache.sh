@@ -1,19 +1,21 @@
 #!/bin/bash
-# collect-source-cache.sh — the exact set of upstream sources each board downloads.
+# collect-source-cache.sh — archive inputs fetched by each board's make download.
 #
 # Usage: collect-source-cache.sh --output <dir> [--release <version>]
 #                               [--boards "a b"] [--mirror <url>] [--resume]
 #
 # For each board this prepares the tree, points openwrt/dl at an EMPTY
 # per-board directory and runs `make download`. What lands there is what that
-# board's build actually asked for.
+# download target asked for. Go modules fetched during compilation are outside
+# this archive manifest: their constraints are in upstream go.mod/go.sum and
+# the linked Tailscale modules are recorded in /usr/share/tailscale/modules.txt.
 #
 # It is deliberately not derived. The alternative -- parsing PKG_SOURCE and
 # PKG_HASH out of every Makefile -- produces a list that looks the same and is
 # not the same thing: it re-implements OpenWrt's download resolution, and drifts
 # from it silently whenever upstream changes how a package is fetched. A
-# release's source cache has to be what the release consumed, so it is collected
-# by consuming it.
+# archive cache is collected by consuming that target. It is not a complete
+# offline build cache and must not be described as one.
 #
 # The developer's own dl/ cannot stand in for this. It is shared across builds
 # and holds several versions of the same package -- here 502 files, 3.8 GB, with

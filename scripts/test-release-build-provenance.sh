@@ -14,6 +14,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Source execution gates are replaced below; host tool availability is not
+# part of this synthetic provenance test. Never inherit a production override.
+export BUSYBOX=true
+
 fail() { echo "FAIL: $1" >&2; exit 1; }
 ok() { echo "ok: $1"; }
 expect_fail() {
@@ -50,6 +54,10 @@ cp -a "$SCRIPT_DIR/../../bpirouter-ui/docs/user" "$UI/docs/user"
 # keep the wiring call sites, but replace only the copied fixture implementations.
 for gate in test-mwan3-canonical.sh test-mwan3-route-delete-order.sh \
 			test-mwan3-dynamic-child.sh \
+			test-mwan3-routing-reservation.py \
+			test-tailscale-product-service.py \
+			test-s2s-reprepare.py \
+			test-one-layout.py test-one-nor-installer.py test-one-mtd-erase.py \
 			test-sqm-canonical.sh test-sqm-lifecycle-owner.sh test-owned-configs.sh \
 			test-offload-disabled.sh \
 			test-rootfs-integrity.sh \
@@ -58,11 +66,24 @@ for gate in test-mwan3-canonical.sh test-mwan3-route-delete-order.sh \
 			test-cellular-netifd-lifecycle.sh \
 			test-netifd-dynamic-ip6assign.sh \
 			test-netifd-host-route.sh \
+			test-netifd-pppoe-mtu.py \
+			test-nft-mss.py \
 			test-netifd-proto-busy.sh \
 			test-factory-reset-rootfs.sh check-rootfs-integrity.sh \
 			check-factory-reset-rootfs.sh check-acceptance-provenance-rootfs.sh; do
     cat >"$BUILD/scripts/$gate" <<'SH'
 #!/bin/sh
+case "$(basename "$0")" in
+    test-tailscale-product-service.py|test-one-layout.py|test-one-nor-installer.py|test-one-mtd-erase.py|test-s2s-reprepare.py|test-nft-mss.py|test-netifd-pppoe-mtu.py)
+        if [ -n "${BPIR_TEST_SOURCE_GATES:-}" ]; then
+            printf '%s %s\n' "$(basename "$0")" "$*" >> "$BPIR_TEST_SOURCE_GATES"
+        fi
+        if [ "${BPIR_FAIL_SOURCE_GATE:-}" = "$(basename "$0")" ]; then
+            echo "injected prepared-source gate failure: $BPIR_FAIL_SOURCE_GATE" >&2
+            exit 1
+        fi
+        ;;
+esac
 exit 0
 SH
     chmod +x "$BUILD/scripts/$gate"
@@ -157,7 +178,7 @@ all:
 	@printf 'current-r3mini-build\n' >bin/targets/mediatek/filogic/openwrt-mediatek-filogic-bananapi_bpi-r3-mini-squashfs-sysupgrade.itb
 	@printf 'current-r3mini-fip\n' >bin/targets/mediatek/filogic/openwrt-mediatek-filogic-bananapi_bpi-r3-mini-snand-bl31-uboot.fip
 	@printf 'current-r3mini-factory\n' >bin/targets/mediatek/filogic/openwrt-mediatek-filogic-bananapi_bpi-r3-mini-snand-factory.bin
-	@for suffix in factory.ubi nor-bl31-uboot.fip nor-factory.bin nor-preloader.bin ram-bl31-uboot.fip snand-bl31-uboot.fip snand-factory.bin snand-preloader.bin; do printf 'current-%s\n' "$$suffix" >"bin/targets/mediatek/filogic/openwrt-mediatek-filogic-openwrt_one-$$suffix"; done
+	@for suffix in factory.ubi nor-bl31-uboot.fip nor-preloader.bin ram-bl31-uboot.fip snand-bl31-uboot.fip snand-factory.bin snand-preloader.bin; do printf 'current-%s\n' "$$suffix" >"bin/targets/mediatek/filogic/openwrt-mediatek-filogic-openwrt_one-$$suffix"; done
 	@printf 'package manifest\n' >bin/targets/mediatek/filogic/openwrt-mediatek-filogic-openwrt_one.manifest
 	@if [ "$${SKIP_INITRAMFS:-0}" != 1 ]; then printf 'current-initramfs\n' >bin/targets/mediatek/filogic/openwrt-mediatek-filogic-openwrt_one-initramfs.itb; fi
 	@if [ "$${SKIP_APK:-0}" != 1 ]; then pkg=$$(mktemp -d); mkdir -p "$$pkg/usr/bin" "$$pkg/www/bpirouter" bin/packages/aarch64_cortex-a53/bpirouter; printf 'apid-from-package\n' >"$$pkg/usr/bin/bpirouter-apid"; chmod 755 "$$pkg/usr/bin/bpirouter-apid"; printf '<html>package</html>\n' >"$$pkg/www/bpirouter/index.html"; tar -czf bin/packages/aarch64_cortex-a53/bpirouter/bpirouter-ui-1.0.apk -C "$$pkg" .; rm -rf "$$pkg"; fi
@@ -516,12 +537,17 @@ SIDECAR="$TARGET_DIR/.bpirouter-build-openwrt-one.json"
 mkdir -p "$TARGET_DIR"
 printf 'stale-initramfs\n' >"$TARGET_DIR/$BASE-initramfs.itb"
 printf 'stale-bootloader\n' >"$TARGET_DIR/$BASE-emmc-preloader.bin"
+printf 'obsolete-nor-factory\n' >"$TARGET_DIR/$BASE-nor-factory.bin"
 printf 'stale-target-ram-bl2\n' >"$TARGET_DIR/mt7981-ram-ddr4-bl2.bin"
 OLD_BL2="$OPENWRT/build_dir/target-old/arm-trusted-firmware-mediatek-mt7981-ram-ddr4/old/build/mt7981/release/bl2.bin"
 mkdir -p "$(dirname "$OLD_BL2")"
 printf 'old-build-dir-ram-bl2\n' >"$OLD_BL2"
 expect_fail "formal build with only stale build_dir RAM BL2" env SKIP_RAMBL2=1 \
     "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --jobs 1 --release-lock "$LOCK"
+grep -Fq 'missing current-build mt7981 RAM DDR4 BL2 in BIN_DIR' "$TMP/negative.log" || {
+    cat "$TMP/negative.log"
+    fail "stale RAM BL2 case did not reach the flashkit input check"
+}
 [ ! -e "$TARGET_DIR/mt7981-ram-ddr4-bl2.bin" ] \
     || fail "release clean or make-flashkit reused a stale target RAM BL2"
 [ ! -e "$SIDECAR" ] || fail "missing current-build RAM BL2 left a release sidecar"
@@ -549,6 +575,7 @@ env SKIP_INITRAMFS=1 "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --job
 
 [ ! -e "$TARGET_DIR/$BASE-initramfs.itb" ] || fail "stale OpenWrt One initramfs survived release build start"
 [ ! -e "$TARGET_DIR/$BASE-emmc-preloader.bin" ] || fail "stale bootloader survived release build start"
+[ ! -e "$TARGET_DIR/$BASE-nor-factory.bin" ] || fail "obsolete whole-NOR image survived release build start"
 [ -f "$FEEDS/net/bpirouter-ui/files/.manifest" ] || fail "alternate UI checkout did not sync to the actual feed"
 "$SCRIPT_DIR/release-build-provenance.py" verify \
     --lock "$LOCK" --release v1.4.9-rc999 --board openwrt-one \
@@ -567,7 +594,6 @@ expected = {
     base + "-factory.ubi",
     base + "-flashkit.tar.gz",
     base + "-nor-bl31-uboot.fip",
-    base + "-nor-factory.bin",
     base + "-nor-preloader.bin",
     base + "-ram-bl31-uboot.fip",
     base + "-snand-bl31-uboot.fip",
@@ -579,6 +605,7 @@ expected = {
 assert files == expected, (files - expected, expected - files)
 assert base + "-initramfs.itb" not in files
 assert base + "-emmc-preloader.bin" not in files
+assert base + "-nor-factory.bin" not in files
 assert d["ui"]["mode"] == "source"
 assert d["ui"]["payload_sha256"] and d["ui"]["payload_inventory_sha256"] and d["ui"]["apid_sha256"]
 PY
@@ -935,7 +962,7 @@ python3 - "$CLASSIFIER_RELABEL_OUTPUT/BUILD-INPUTS.json" <<'PY'
 import json, pathlib, sys
 p = pathlib.Path(sys.argv[1]); data = json.loads(p.read_text())
 info = data["boards"]["openwrt-one"]
-outer = next(item for item in info["artifacts"] if item["file"].endswith("-nor-factory.bin"))
+outer = next(item for item in info["artifacts"] if item["file"].endswith("-snand-factory.bin"))
 inner = next(item for item in info["build_provenance"]["artifacts"] if item["file"] == outer["file"])
 outer["role"] = inner["role"] = "bootloader"
 p.write_text(json.dumps(data, indent=2) + "\n")
@@ -956,7 +983,7 @@ for item in info["artifacts"]:
         (root / item["path"]).unlink()
     else:
         kept.append(item)
-factory = next(item for item in kept if item["file"].endswith("-nor-factory.bin"))
+factory = next(item for item in kept if item["file"].endswith("-snand-factory.bin"))
 factory["role"] = "bootloader"
 info["artifacts"] = kept
 p.write_text(json.dumps(data, indent=2) + "\n")
@@ -1571,12 +1598,49 @@ ok "development artifact completeness and repository drift gates"
 
 # The leaf full-build gate must also clear an inherited version when called
 # directly against an unbound prepared tree, not only through rebuild-all.
-BPIROUTER_UI_PKG_VERSION=9.9.9 \
+BPIROUTER_UI_PKG_VERSION=9.9.9 BPIR_TEST_SOURCE_GATES="$TMP/source-gate-calls" \
     "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --jobs 1 \
     >"$TMP/development-build-full.log" 2>&1 \
     || { cat "$TMP/development-build-full.log"; fail "direct development full build failed"; }
 [ -z "$(cat "$OPENWRT/.observed-ui-package-version")" ] \
     || fail "unbound full build inherited a formal package version"
+
+mkdir -p "$BUILD/imagebuilder/staging_dir"
+for gate in test-tailscale-product-service.py test-one-layout.py \
+        test-one-nor-installer.py test-one-mtd-erase.py; do
+    grep -Fq "$gate --prepared" "$TMP/source-gate-calls" \
+        || fail "full build omitted prepared-source gate: $gate"
+    expect_fail "$gate failure stops the full build" env BPIR_FAIL_SOURCE_GATE="$gate" \
+        "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --jobs 1
+    grep -Fq "injected prepared-source gate failure: $gate" "$TMP/negative.log" \
+        || fail "build failed before reaching $gate"
+    expect_fail "$gate failure stops ImageBuilder" env BPIR_FAIL_SOURCE_GATE="$gate" \
+        "$PIPELINE_SCRIPTS/build-image.sh" --board openwrt-one --release
+    grep -Fq "injected prepared-source gate failure: $gate" "$TMP/negative.log" \
+        || fail "ImageBuilder failed before reaching $gate"
+done
+ok "all four prepared-source gates execute and stop full/ImageBuilder builds"
+
+grep -Fxq 'test-nft-mss.py --prepared' "$TMP/source-gate-calls" \
+    || fail "full build omitted the prepared kernel MSS gate"
+expect_fail "kernel MSS failure stops the full build" env BPIR_FAIL_SOURCE_GATE=test-nft-mss.py \
+    "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --jobs 1
+grep -Fq 'injected prepared-source gate failure: test-nft-mss.py' "$TMP/negative.log" \
+    || fail "build failed before reaching the kernel MSS gate"
+
+grep -Fxq 'test-netifd-pppoe-mtu.py --prepared' "$TMP/source-gate-calls" \
+    || fail "full build omitted the prepared PPPoE MTU gate"
+expect_fail "PPPoE MTU failure stops the full build" env BPIR_FAIL_SOURCE_GATE=test-netifd-pppoe-mtu.py \
+    "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --jobs 1
+grep -Fq 'injected prepared-source gate failure: test-netifd-pppoe-mtu.py' "$TMP/negative.log" \
+    || fail "build failed before reaching the PPPoE MTU gate"
+
+grep -Fq "test-s2s-reprepare.py $OPENWRT" "$TMP/source-gate-calls" \
+    || fail "full build omitted the fw4 reprepare gate"
+expect_fail "fw4 reprepare failure stops the full build" env BPIR_FAIL_SOURCE_GATE=test-s2s-reprepare.py \
+    "$PIPELINE_SCRIPTS/build-full.sh" --board openwrt-one --jobs 1
+grep -Fq 'injected prepared-source gate failure: test-s2s-reprepare.py' "$TMP/negative.log" \
+    || fail "build failed before reaching the fw4 reprepare gate"
 
 cp "$OPENWRT/source.txt" "$TMP/development-source.backup"
 expect_fail "development build-end prepared tree drift" env MUTATE_PREPARED=1 \

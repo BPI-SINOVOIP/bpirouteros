@@ -1,0 +1,18 @@
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# fw4 installs default denial before its synchronous authorization callback.
+destroy table inet bpirouter_s2s
+table inet bpirouter_s2s {
+    chain input {
+        type filter hook input priority filter - 10; policy accept;
+        iifname "tailscale0" drop
+    }
+    chain output {
+        type filter hook output priority filter - 10; policy accept;
+        oifname "tailscale0" drop
+    }
+    chain forward {
+        type filter hook forward priority filter - 10; policy accept;
+        iifname "tailscale0" drop
+        oifname "tailscale0" drop
+    }
+}

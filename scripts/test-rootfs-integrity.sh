@@ -27,7 +27,25 @@ GATE_EXTRA=()
 # forces an explicit provider into the assembled image.
 build_rootfs() {
 	rm -rf "$ROOT"
-	mkdir -p "$ROOT"/{bin,sbin,usr/bin,usr/sbin,etc/init.d,etc/rc.d,etc/uci-defaults,etc/modules.d,usr/libexec,lib/bpirouter,lib/modules/6.12-test}
+	mkdir -p "$ROOT"/{bin,sbin,usr/bin,usr/sbin,etc/config,etc/init.d,etc/rc.d,etc/uci-defaults,etc/modules.d,usr/libexec,lib/bpirouter,lib/modules/6.12-test,usr/share/nftables.d/ruleset-pre}
+	: >"$ROOT/etc/config/bpirouter"
+	: >"$ROOT/etc/config/tailscale"
+	mkdir -p "$ROOT/usr/share/tailscale"
+	for notice in LICENSE tailscale.md go.mod go.sum modules.txt; do
+		printf 'fixture %s\n' "$notice" >"$ROOT/usr/share/tailscale/$notice"
+	done
+	: >"$ROOT/usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft"
+	printf '#!/bin/sh\nexit 0\n' >"$ROOT/usr/sbin/tailscaled"
+	chmod +x "$ROOT/usr/sbin/tailscaled"
+	cat >"$ROOT/etc/init.d/tailscale" <<'SH'
+#!/bin/sh /etc/rc.common
+START=80
+start_service() {
+	/usr/bin/bpirouter-apid --s2s-service=check || return
+	procd_set_param command /usr/bin/bpirouter-apid --s2s-service=run
+}
+SH
+	chmod +x "$ROOT/etc/init.d/tailscale"
 	for applet in sh mktemp mkdir chmod rm sync cat ls sed grep printf; do
 		: >"$ROOT/bin/$applet"; chmod +x "$ROOT/bin/$applet"
 	done
@@ -45,6 +63,21 @@ build_rootfs() {
 	write_init mwan3 19
 	write_init network 20
 	write_init bpirouter-api 99
+	cat >"$ROOT/etc/init.d/bpirouter-vpn-prepare" <<'SH'
+#!/bin/sh /etc/rc.common
+START=18
+PROG=${BPIR_VPN_PREPARE_PROG:-/usr/bin/bpirouter-apid}
+boot() {
+	"$PROG" --prepare-vpn-firewall || logger -t bpirouter-vpn-prepare "VPN firewall preparation failed; keeping existing configuration" || true
+	return 0
+}
+start() { return 0; }
+stop() { return 0; }
+SH
+	chmod +x "$ROOT/etc/init.d/bpirouter-vpn-prepare"
+	ln -sf ../init.d/bpirouter-vpn-prepare "$ROOT/etc/rc.d/S18bpirouter-vpn-prepare"
+	printf '#!/bin/sh\n# prepare-vpn-firewall\nexit 0\n' >"$ROOT/usr/bin/bpirouter-apid"
+	chmod +x "$ROOT/usr/bin/bpirouter-apid"
 	cat >"$ROOT/etc/init.d/bpirouter-ota-restore" <<'SH'
 #!/bin/sh /etc/rc.common
 START=10
@@ -128,6 +161,18 @@ must_refuse_with_path() {
 # ── Baseline ────────────────────────────────────────────────────────────────
 build_rootfs
 must_pass "a well-formed rootfs was rejected"
+
+for path in etc/config/tailscale usr/sbin/tailscaled \
+	usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft; do
+	build_rootfs
+	rm "$ROOT/$path"
+	must_refuse "missing S2S prerequisite /$path was accepted"
+	grep -Fq "missing /$path" "$WORK/out" || fail "wrong rejection for /$path"
+done
+build_rootfs
+printf '#!/bin/sh\nstart_service() { /usr/sbin/tailscaled; }\n' >"$ROOT/etc/init.d/tailscale"
+must_refuse "unmanaged tailscale init was accepted"
+grep -Fq 'tailscale init does not use the product lifecycle' "$WORK/out" || fail "wrong init rejection"
 
 build_rootfs
 GATE_EXTRA=(--acceptance-tools "$BUNDLE")
@@ -291,6 +336,10 @@ must_refuse "the gate accepted an rc.common that can refuse a service start"
 
 # ── Boot order still guarded ────────────────────────────────────────────────
 build_rootfs
+rm -f "$ROOT/etc/config/bpirouter"
+must_refuse "the gate accepted a rootfs whose first firewall reload cannot read product settings"
+
+build_rootfs
 rm -f "$ROOT/usr/libexec/bpirouter-ota-restore"
 must_refuse "the gate accepted a rootfs without the every-boot OTA restore helper"
 
@@ -372,29 +421,33 @@ build_rootfs
 printf '\texit 1\n' >>"$ROOT/etc/init.d/bpirouter-cfg-recovery"
 must_refuse "the gate accepted a boot-path recovery that can exit non-zero"
 
-# ── The gate and the quick-mode overlay must not drift apart ────────────────
-# Quick images install neither bpirouter-base nor bpirouter-ui: their product
-# files are dropped as a raw overlay by build-image.sh. So every product
-# payload file the gate DEMANDS has to be one that overlay supplies, or quick
-# mode cannot pass a gate it is unconditionally run through.
-#
-# This has already happened twice in one change set -- the sqm canonicalizer
-# and its strict reader were added to the gate without being added to the
-# overlay, and the release provenance fixture drifted the same way. A static
-# check is cheaper than finding out at build time.
+# The image must retain both dependency evidence and upstream notices.
+for fault in missing wrong_order disabled stale_binary; do
+	build_rootfs
+	case "$fault" in
+		missing) rm "$ROOT/etc/init.d/bpirouter-vpn-prepare" ;;
+		wrong_order) sed -i 's/START=18/START=21/' "$ROOT/etc/init.d/bpirouter-vpn-prepare" ;;
+		disabled) rm "$ROOT/etc/rc.d/S18bpirouter-vpn-prepare" ;;
+		stale_binary) printf '#!/bin/sh\nexit 0\n' >"$ROOT/usr/bin/bpirouter-apid" ;;
+	esac
+	must_refuse "the gate accepted VPN preparation defect: $fault"
+done
+
+for notice in LICENSE tailscale.md go.mod go.sum modules.txt; do
+	build_rootfs
+	rm "$ROOT/usr/share/tailscale/$notice"
+	must_refuse "the gate accepted a missing Tailscale notice or dependency record: $notice"
+done
+
+# Quick mode must refuse before preparation, downloads or image assembly.
+# The official ImageBuilder cannot provide the product's patched Tailscale.
 BUILD_IMAGE="$SCRIPT_DIR/build-image.sh"
-[ -f "$BUILD_IMAGE" ] || fail "build-image.sh is missing next to the gate"
-required=$(sed -n '/^for file in/,/^done/p' "$GATE" |
-	grep -oE '(etc/uci-defaults|usr/libexec)/[A-Za-z0-9._-]*bpirouter[A-Za-z0-9._-]*' | sort -u)
-[ -n "$required" ] || fail "could not read the gate's product payload list"
-for path in $required; do
-	grep -Fq "$(basename "$path")" "$BUILD_IMAGE" ||
-		fail "the gate requires /$path but build-image.sh's quick overlay never places it"
+for board in bpi-r4 openwrt-one; do
+	if bash "$BUILD_IMAGE" --board "$board" >"$WORK/quick-refusal" 2>&1; then
+		fail "quick ImageBuilder unexpectedly accepted $board"
+	fi
+	grep -Fq "Quick ImageBuilder builds are unsupported" "$WORK/quick-refusal" ||
+		fail "quick mode failed after reaching an unrelated prerequisite"
 done
-for driver in mt7915e mt7996e; do
-	grep -Fq "$driver wed_enable=0" "$BUILD_IMAGE" ||
-		fail "build-image.sh quick mode never disables WED for $driver"
-done
-echo "  quick-mode overlay supplies every product payload file the gate requires"
 
 echo "PASS: rootfs integrity gate reproduces the missing-command defect, tolerates shell that is not an external command, and still guards boot order and an ungated rc.common"
