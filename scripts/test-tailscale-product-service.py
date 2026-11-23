@@ -39,8 +39,10 @@ with tempfile.TemporaryDirectory(prefix='bpir-s2s-service-') as directory:
     # peerapi runs inside tailscaled, outside the S2S nftables guard.
     tags = [line.split(':=', 1)[1].strip().split(',') for line in
             (feed / 'net/tailscale/Makefile').read_text().splitlines() if line.startswith('GO_PKG_TAGS:=')]
-    assert len(tags) == 1 and {'ts_omit_peerapiserver', 'ts_omit_wakeonlan',
-                               'ts_omit_advertiseexitnode'} <= set(tags[0]), tags
+    required = {'ts_omit_clientupdate', 'ts_omit_peerapiserver', 'ts_omit_wakeonlan',
+                'ts_omit_advertiseexitnode'}
+    if len(tags) != 1 or not required.issubset(tags[0]):
+        raise SystemExit(f'unsafe Tailscale build tags: {tags}')
     init = feed / 'net/tailscale/files/tailscale.init'
     subprocess.run(['sh', '-n', str(init)], check=True)
 

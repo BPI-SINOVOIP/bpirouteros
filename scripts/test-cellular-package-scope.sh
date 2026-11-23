@@ -30,7 +30,7 @@ for board in $BOARDS; do
 		&& fail "$board re-enables an unsupported MBIM package"
 done
 
-# Exercise the same mapping used by build-image.sh. A Kconfig negative must
+# Check package selection. A Kconfig negative must
 # become an ImageBuilder removal token, not merely disappear from the list.
 packages=$(sed -nE 's/^CONFIG_PACKAGE_(.*)=y$/\1/p; s/^# CONFIG_PACKAGE_(.*) is not set$/-\1/p' "$COMMON" | LC_ALL=C sort -u)
 for token in -umbim -kmod-usb-net-cdc-mbim; do

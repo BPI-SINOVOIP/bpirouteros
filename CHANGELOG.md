@@ -7,6 +7,49 @@ and installation instructions, see the [feature guide](FEATURES.md) and
 For the purpose, board scope and origin of the current patch groups, see the
 [patch guide](PATCHES.md).
 
+## v1.6.1
+
+Maintenance release for the same seven models, based on OpenWrt 25.12.6.
+
+### Security fixes
+
+- The built-in Tailscale client has no standalone updater. Update it through
+  a BpiRouter firmware upgrade.
+- First setup is wired: a new or reset router keeps Wi-Fi off and stores no
+  Wi-Fi password, and Wi-Fi can only be turned on with a password of the
+  owner's choosing. Earlier versions broadcast Wi-Fi with a shared, published
+  factory password, which stayed in use after setup if Wi-Fi was skipped.
+- OpenWrt 25.12.6 security updates (hostapd, mac80211, uhttpd, rpcd, LuCI,
+  OpenSSL, Mbed TLS and others) and the Linux fix for CVE-2026-98432; the
+  management service is built with Go 1.27.4.
+- OpenWrt's default IPsec forward rules (ESP, UDP 500) are restricted to IPv4
+  when unchanged, so they no longer reach LAN devices over IPv6.
+
+### Fixes and changes
+
+- Fixed Guest and IoT Wi-Fi client isolation across bands. Enable client isolation on both bands to prevent clients on one band from reaching clients on the other.
+
+- Dynamic DNS fixes cover HTTPS certificate checks, Cloudflare subdomains, provider error reporting and forced updates when the address is unchanged. DuckDNS and Cloudflare were verified with live accounts. No-IP, Dynu and FreeDNS were verified against simulated provider responses.
+- WAN MTU settings now apply to the underlying device for DHCP and static WANs. Clear the MTU field to restore the protocol default. If you previously entered a custom DHCP or static WAN MTU, enter it again after upgrading.
+- Client names and notes now count the 128-character limit by character and reject control characters.
+- The setup wizard records the country or region and the time zone, prefilled
+  from the browser, also when Wi-Fi is skipped; full time zone list.
+- Saving time zones such as Singapore or Dubai in System works again.
+- Signed-in sessions survive the router setting its clock after start-up.
+- The unpublished `bpirouter` package feed is no longer listed.
+- Kernel support for user-installed software: USB storage (exFAT, NTFS), USB
+  Ethernet and USB serial adapters, zram, transparent-proxy firewall features.
+- Package metadata no longer records the build machine's paths.
+- Public source repository: release-maintenance tools and tests that need the
+  development workspace are no longer included; the UI package's third-party
+  notices are exported with it.
+
+### Corrections
+
+- v1.5.0 listed access schedules and DNS filtering, which BpiRouter does not
+  provide; v1.6.0 listed per-device DNS servers, which are available only
+  through the API in v1.6.
+
 ## v1.6.0
 
 ### Supported hardware

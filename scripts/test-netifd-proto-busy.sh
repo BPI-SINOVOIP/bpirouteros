@@ -209,7 +209,7 @@ if [ -f "$1" ]; then
 else
 	echo "netifd restart callback test: SKIP (locked netifd source not prepared)"
 fi
-for gate in build-full.sh build-image.sh; do
+for gate in build-full.sh; do
 	grep -Fq '"$SCRIPT_DIR/test-netifd-proto-busy.sh"' "$BUILD_DIR/scripts/$gate"
 	grep -Fq '"$SCRIPT_DIR/test-netifd-proto-busy.sh" --rootfs' "$BUILD_DIR/scripts/$gate"
 done

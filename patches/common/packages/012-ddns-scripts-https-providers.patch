@@ -1,0 +1,129 @@
+diff --git a/net/ddns-scripts/Makefile b/net/ddns-scripts/Makefile
+--- a/net/ddns-scripts/Makefile
++++ b/net/ddns-scripts/Makefile
+@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=ddns-scripts
+ PKG_VERSION:=2.8.4
+-PKG_RELEASE:=8
++PKG_RELEASE:=9
+ 
+ PKG_LICENSE:=GPL-2.0
+ 
+diff --git a/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh b/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh
+--- a/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh
++++ b/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh
+@@ -158,8 +158,8 @@ ERR_LAST=$?	# save return code - equal 0 if SECTION_ID found
+ [ -z "$is_glue" ]	  && is_glue=0		# default the ddns record is not a glue record
+ [ "$ip_source" = "network" -a -z "$ip_network" -a $use_ipv6 -eq 0 ] && ip_network="wan"  # IPv4: default wan
+ [ "$ip_source" = "network" -a -z "$ip_network" -a $use_ipv6 -eq 1 ] && ip_network="wan6" # IPv6: default wan6
+-[ "$ip_source" = "web" -a -z "$ip_url" -a $use_ipv6 -eq 0 ] && ip_url="http://checkip.dyndns.com"
+-[ "$ip_source" = "web" -a -z "$ip_url" -a $use_ipv6 -eq 1 ] && ip_url="http://checkipv6.dyndns.com"
++[ "$ip_source" = "web" -a -z "$ip_url" -a $use_ipv6 -eq 0 ] && ip_url="https://checkip.dyndns.com"
++[ "$ip_source" = "web" -a -z "$ip_url" -a $use_ipv6 -eq 1 ] && ip_url="https://checkipv6.dyndns.com"
+ [ "$ip_source" = "interface" -a -z "$ip_interface" ] && ip_interface="eth1"
+ 
+ # url encode username (might be email or something like this)
+diff --git a/net/ddns-scripts/files/usr/lib/ddns/update_no-ip_com.sh b/net/ddns-scripts/files/usr/lib/ddns/update_no-ip_com.sh
+--- a/net/ddns-scripts/files/usr/lib/ddns/update_no-ip_com.sh
++++ b/net/ddns-scripts/files/usr/lib/ddns/update_no-ip_com.sh
+@@ -6,39 +6,20 @@
+ #
+ # This script is parsed by dynamic_dns_functions.sh inside send_update() function
+ #
+-# provider did not reactivate records, if no IP change was recognized
+-# so we send a dummy (localhost) and a seconds later we send the correct IP addr
++# BpiRouter: send the real address only. Upstream first sent a dummy
++# (localhost) so that records without an address change were reactivated;
++# whenever the second request failed, the host was left at 127.0.0.1 / ::1.
+ #
+-local __DUMMY
+-local __UPDURL6="http://[USERNAME]:[PASSWORD]@dynupdate6.noip.com/nic/update?hostname=[DOMAIN]&myip=[IP]"
+-local __UPDURL="http://[USERNAME]:[PASSWORD]@dynupdate.noip.com/nic/update?hostname=[DOMAIN]&myip=[IP]"
++local __UPDURL6="https://[USERNAME]:[PASSWORD]@dynupdate6.noip.com/nic/update?hostname=[DOMAIN]&myip=[IP]"
++local __UPDURL="https://[USERNAME]:[PASSWORD]@dynupdate.noip.com/nic/update?hostname=[DOMAIN]&myip=[IP]"
+ # inside url we need username and password
+ [ -z "$username" ] && write_log 14 "Service section not configured correctly! Missing 'username'"
+ [ -z "$password" ] && write_log 14 "Service section not configured correctly! Missing 'password'"
+ 
+-# set IP version dependend dummy (localhost)
+-[ $use_ipv6 -eq 0 ] && __DUMMY="127.0.0.1" || __DUMMY="::1"
+ [ $use_ipv6 -eq 0 ] && __UPDURL=$__UPDURL || __UPDURL=$__UPDURL6
+ 
+-# lets do DUMMY transfer
+-write_log 7 "sending dummy IP to 'no-ip.com'"
+-__URL=$(echo $__UPDURL | sed -e "s#\[USERNAME\]#$URL_USER#g" -e "s#\[PASSWORD\]#$URL_PASS#g" \
+-			       -e "s#\[DOMAIN\]#$domain#g" -e "s#\[IP\]#$__DUMMY#g")
+-[ $use_https -ne 0 ] && __URL=$(echo $__URL | sed -e 's#^http:#https:#')
+-
+-do_transfer "$__URL" || return 1
+-
+-write_log 7 "'no-ip.com' answered:${N}$(cat $DATFILE)"
+-# analyse provider answers
+-# "good [IP_ADR]"	= successful
+-# "nochg [IP_ADR]"	= no change but OK
+-grep -E "good|nochg" $DATFILE >/dev/null 2>&1 || return 1
+-
+-# lets wait a seconds
+-sleep 1
+-
+-# now send the correct data
+-write_log 7 "sending real IP to 'no-ip.com'"
++# send the update
++write_log 7 "sending IP to 'no-ip.com'"
+ __URL=$(echo $__UPDURL | sed -e "s#\[USERNAME\]#$URL_USER#g" -e "s#\[PASSWORD\]#$URL_PASS#g" \
+ 			       -e "s#\[DOMAIN\]#$domain#g" -e "s#\[IP\]#$__IP#g")
+ [ $use_https -ne 0 ] && __URL=$(echo $__URL | sed -e 's#^http:#https:#')
+diff --git a/net/ddns-scripts/files/usr/share/ddns/default/afraid.org-v2-token.json b/net/ddns-scripts/files/usr/share/ddns/default/afraid.org-v2-token.json
+--- a/net/ddns-scripts/files/usr/share/ddns/default/afraid.org-v2-token.json
++++ b/net/ddns-scripts/files/usr/share/ddns/default/afraid.org-v2-token.json
+@@ -1,9 +1,11 @@
+ {
+ 	"name": "afraid.org-v2-token",
+ 	"ipv4": {
+-		"url": "https://sync.afraid.org/u/[PASSWORD]/?address=[IP]"
++		"url": "https://sync.afraid.org/u/[PASSWORD]/?address=[IP]",
++		"answer": "^Updated|No IP change|has not changed"
+ 	},
+ 	"ipv6": {
+-		"url": "https://v6.sync.afraid.org/u/[PASSWORD]/?address=[IP]"
++		"url": "https://v6.sync.afraid.org/u/[PASSWORD]/?address=[IP]",
++		"answer": "^Updated|No IP change|has not changed"
+ 	}
+ }
+diff --git a/net/ddns-scripts/files/usr/share/ddns/default/duckdns.org.json b/net/ddns-scripts/files/usr/share/ddns/default/duckdns.org.json
+--- a/net/ddns-scripts/files/usr/share/ddns/default/duckdns.org.json
++++ b/net/ddns-scripts/files/usr/share/ddns/default/duckdns.org.json
+@@ -1,11 +1,11 @@
+ {
+ 	"name": "duckdns.org",
+ 	"ipv4": {
+-		"url": "http://www.duckdns.org/update?domains=[DOMAIN]&token=[PASSWORD]&ip=[IP]",
+-		"answer": "OK"
++		"url": "https://www.duckdns.org/update?domains=[DOMAIN]&token=[PASSWORD]&ip=[IP]",
++		"answer": "^OK"
+ 	},
+ 	"ipv6": {
+-		"url": "http://www.duckdns.org/update?domains=[DOMAIN]&token=[PASSWORD]&ipv6=[IP]",
+-		"answer": "OK"
++		"url": "https://www.duckdns.org/update?domains=[DOMAIN]&token=[PASSWORD]&ipv6=[IP]",
++		"answer": "^OK"
+ 	}
+ }
+diff --git a/net/ddns-scripts/files/usr/share/ddns/default/dynu.com.json b/net/ddns-scripts/files/usr/share/ddns/default/dynu.com.json
+--- a/net/ddns-scripts/files/usr/share/ddns/default/dynu.com.json
++++ b/net/ddns-scripts/files/usr/share/ddns/default/dynu.com.json
+@@ -1,9 +1,11 @@
+ {
+ 	"name": "dynu.com",
+ 	"ipv4": {
+-		"url": "http://api.dynu.com/nic/update?hostname=[DOMAIN]&myip=[IP]&username=[USERNAME]&password=[PASSWORD]"
++		"url": "https://api.dynu.com/nic/update?hostname=[DOMAIN]&myip=[IP]&username=[USERNAME]&password=[PASSWORD]",
++		"answer": "^(good|nochg)"
+ 	},
+ 	"ipv6": {
+-		"url": "http://api.dynu.com/nic/update?hostname=[DOMAIN]&myip=no&myipv6=[IP]&username=[USERNAME]&password=[PASSWORD]"
++		"url": "https://api.dynu.com/nic/update?hostname=[DOMAIN]&myip=no&myipv6=[IP]&username=[USERNAME]&password=[PASSWORD]",
++		"answer": "^(good|nochg)"
+ 	}
+ }

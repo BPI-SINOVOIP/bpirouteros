@@ -138,6 +138,15 @@ See the [MxL origin note](patches/bpi-r4-pro/MXL862XX-UPSTREAM.md) for provenanc
 | [Common packages `009-*`](patches/common/packages/) | All seven | Report the local key-expiry decision for the router's own node. | Local |
 | [Common packages `010-*`](patches/common/packages/) | All seven | Build without the peer API server, Wake-on-LAN and exit-node advertisement. | Local |
 
+### Maintenance changes in v1.6.1
+
+| Patch group | Purpose | Source |
+|---|---|---|
+| [Common kernel `988-*`](patches/common/kernel/) | Defer freeing IPv4 connection options until concurrent readers finish. | Upstream Linux |
+| [Common openwrt `008-*`](patches/common/openwrt/) | Apply bridge-port isolation to managed Guest and IoT access points with client isolation enabled. | Local |
+| [Common packages `000-*` and `011-*`](patches/common/packages/) | Keep Tailscale at 1.98.3 and update the Go 1.26 package to 1.26.11. | Local |
+| [Common packages `012-*` through `014-*`](patches/common/packages/) | Use HTTPS for DDNS providers, correct Cloudflare zone lookup and check update responses before recording success. | Local |
+
 The public patches are only part of the complete firmware. The proprietary
 UI/APID package is supplied separately as a binary; this guide does not describe
 its private implementation. A patch's presence alone is not a promise of support

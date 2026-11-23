@@ -13,7 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_DIR=${BPIR_BUILD_DIR:-$(dirname "$SCRIPT_DIR")}
-FEEDS_DIR=${BPIR_FEEDS_DIR:-$(dirname "$BUILD_DIR")/bpirouter-feeds}
+FEEDS_DIR=${BPIR_FEEDS_DIR:-$BUILD_DIR/feeds/bpirouter}
 INIT_SCRIPT="$FEEDS_DIR/net/bpirouter-base/files/etc/uci-defaults/12-bpirouter-sqm-canonical"
 BASE_MAKEFILE="$FEEDS_DIR/net/bpirouter-base/Makefile"
 STRICT_AWK="$FEEDS_DIR/net/bpirouter-base/files/usr/libexec/bpirouter-sqm-strict.awk"
@@ -257,7 +257,7 @@ for board in bpi-r3-mini bpi-r3 bpi-r4-lite bpi-r4-pro bpi-r4 openwrt-one; do
 		fail "$(basename "$config") ships the LuCI SQM app; it is a second writer over a product-owned config"
 	fi
 done
-for gate in "$BUILD_DIR/scripts/build-full.sh" "$BUILD_DIR/scripts/build-image.sh"; do
+for gate in "$BUILD_DIR/scripts/build-full.sh"; do
 	grep -Fq '"$SCRIPT_DIR/test-sqm-canonical.sh"' "$gate" || \
 		fail "$(basename "$gate") does not run the sqm build gate"
 done

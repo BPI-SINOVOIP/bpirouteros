@@ -1,0 +1,88 @@
+#!/bin/sh
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# KI-10: OpenWrt's stock Allow-IPSec-ESP and Allow-ISAKMP forward rules carry no
+# address family. With a public IPv6 prefix on the LAN, the internet can then
+# send ESP and UDP 500 straight to LAN hosts. Restrict each rule to IPv4 while it
+# still matches the upstream definition exactly; a rule changed in any way --
+# including an explicit family -- is the user's and is left alone.
+#
+# /etc/init.d/bpirouter-ipsec-ipv4 calls this on every boot, after the OTA
+# config restore and generation recovery and before the firewall starts. It
+# cannot be a uci-defaults script: a keep-settings upgrade restores the old
+# firewall config after uci-defaults have run.
+#
+# It acts once per firewall configuration. Afterwards a rule that looks stock
+# again is the user's choice: LuCI's "IPv4 and IPv6" removes the family option.
+# The record is a section of the firewall config itself (fw4 reads only its own
+# section types), committed together with the change. Whatever brings back an
+# older firewall config -- a backup restore, an upgrade from a release without
+# the record, a generation recovery, a factory reset -- brings the migration
+# back with it. A failed step records nothing and the next boot tries again.
+
+UCI=${BPIR_UCI_BIN:-uci}
+KMSG=${BPIR_KMSG:-/dev/kmsg}
+RECORD=firewall.bpirouter_migration
+
+# This runs before logd (S12log), so a syslog message would be dropped. logd
+# imports the kernel log once it starts: the line shows in dmesg and logread.
+log() {
+	echo "bpirouter-ipsec-ipv4: $1" >"$KMSG" 2>/dev/null || true
+}
+
+[ "$("$UCI" -q get "$RECORD.ipsec_ipv4" 2>/dev/null)" = 1 ] && exit 0
+
+# Another writer's uncommitted firewall change must not be committed with ours.
+if ! pending=$("$UCI" -q changes firewall 2>/dev/null); then
+	log "could not read pending firewall changes; IPsec rules left unchanged"
+	exit 0
+fi
+if [ -n "$pending" ]; then
+	log "firewall has uncommitted changes; IPsec rules left unchanged"
+	exit 0
+fi
+
+# From here on every staged change is ours.
+abort() {
+	"$UCI" -q revert firewall 2>/dev/null || true
+	log "$1; IPsec rules left unchanged"
+	exit 0
+}
+
+# The stock rules are anonymous sections. Plain `uci show` names them by
+# position (firewall.@rule[7]); -X gives the stable internal name (cfg0c92bd),
+# which is what the lookups and the set below need.
+config=$("$UCI" -q -X show firewall 2>/dev/null) || abort "could not read the firewall config"
+
+# matches_stock SECTION OPTION-LINE...: the section holds exactly these lines.
+matches_stock() {
+	sec=$1
+	shift
+	actual=$(printf '%s\n' "$config" | sed -n "s/^firewall\\.$sec\\([.=]\\)/\\1/p" | sort)
+	expected=$(printf '%s\n' "$@" | sort)
+	[ -n "$actual" ] && [ "$actual" = "$expected" ]
+}
+
+sections_named() {
+	printf '%s\n' "$config" |
+		sed -n "s/^firewall\\.\\([A-Za-z0-9_]*\\)\\.name='$1'\$/\\1/p"
+}
+
+changed=0
+for sec in $(sections_named Allow-IPSec-ESP); do
+	matches_stock "$sec" "=rule" ".name='Allow-IPSec-ESP'" ".src='wan'" ".dest='lan'" \
+		".proto='esp'" ".target='ACCEPT'" || continue
+	"$UCI" -q set "firewall.$sec.family=ipv4" || abort "could not stage the IPv4 restriction"
+	changed=1
+done
+for sec in $(sections_named Allow-ISAKMP); do
+	matches_stock "$sec" "=rule" ".name='Allow-ISAKMP'" ".src='wan'" ".dest='lan'" \
+		".dest_port='500'" ".proto='udp'" ".target='ACCEPT'" || continue
+	"$UCI" -q set "firewall.$sec.family=ipv4" || abort "could not stage the IPv4 restriction"
+	changed=1
+done
+
+"$UCI" -q set "$RECORD=bpirouter" && "$UCI" -q set "$RECORD.ipsec_ipv4=1" ||
+	abort "could not stage the migration record"
+"$UCI" -q commit firewall || abort "could not commit the IPv4 restriction"
+[ "$changed" = 0 ] || log "restricted the stock IPsec forward rules to IPv4"
+exit 0

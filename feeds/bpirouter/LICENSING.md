@@ -1,6 +1,5 @@
 # Licensing boundaries (bpirouter-feeds)
 
-> **Status: the licensing boundaries were finalized by legal review on 2026-08-05.**
 > If this document conflicts with the root `LICENSE`, **this document takes
 > precedence**. Proprietary terms in `LICENSE` apply only to material identified
 > here as proprietary.
@@ -59,9 +58,6 @@ They are treated as an aggregate, not a derivative work, under the GPL.
 The Makefile above is the recipe that installs the payload into the image.
 Different licences for the free recipe and proprietary payload are expected;
 this is a common arrangement for commercial components in the OpenWrt ecosystem.
-
-The independence classification of `bpirouter-ui` was finalized by legal review
-on 2026-08-05. See the README supplied with this source.
 
 ## 4. Trademarks and branding
 

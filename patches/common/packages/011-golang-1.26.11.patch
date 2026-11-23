@@ -1,0 +1,16 @@
+diff --git a/lang/golang/golang1.26/Makefile b/lang/golang/golang1.26/Makefile
+--- a/lang/golang/golang1.26/Makefile
++++ b/lang/golang/golang1.26/Makefile
+@@ -8,10 +8,10 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=golang1.26
+ GO_VERSION_MAJOR_MINOR:=1.26
+-GO_VERSION_PATCH:=9
++GO_VERSION_PATCH:=11
+ GO_VERSION_RC:=
+ GO_BOOTSTRAP_VERSION:=bootstrap
+-PKG_HASH:=9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca
++PKG_HASH:=d44101b0ff27ed2a4c75ad46c17b9c74359209e2eb2ca7c9df6cb4fdb68e1969
+ 
+ PKG_VERSION:=$(GO_VERSION_MAJOR_MINOR)$(if $(GO_VERSION_RC),.0)$(if $(GO_VERSION_PATCH),.$(GO_VERSION_PATCH))
+ PKG_FILE_VERSION:=$(GO_VERSION_MAJOR_MINOR)$(if $(GO_VERSION_RC),rc$(GO_VERSION_RC))$(if $(GO_VERSION_PATCH),.$(GO_VERSION_PATCH))

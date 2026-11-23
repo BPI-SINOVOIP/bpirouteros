@@ -27,10 +27,12 @@ fi
 # The rootfs must be supplied. This gate runs after ASSEMBLY, and the rc.d
 # links it checks are created by each package's postinst during assembly -- the
 # staging tree this used to fall back to has an empty /etc/rc.d, so the search
-# could only ever produce a red that means nothing. build-full.sh and
-# build-image.sh both pass the assembled root they just produced.
-[ -n "$ROOT" ] || fail "usage: $(basename "$0") <assembled-rootfs>  (e.g. the ImageBuilder root, as build-image.sh passes it)"
+# must be performed on the assembled root.
+[ -n "$ROOT" ] || fail "usage: $(basename "$0") <assembled-rootfs>"
 [ -d "$ROOT" ] || fail "target rootfs $ROOT is not a directory"
+
+# What every image needs, with or without the UI package, is checked there.
+"$SCRIPT_DIR/check-rootfs-base.sh" "$ROOT" >/dev/null || exit 1
 
 # ── 1. Boot order and payload ────────────────────────────────────────────────
 
@@ -284,4 +286,4 @@ if [ -n "$missing" ]; then
 	fail "product shell depends on commands the image does not ship (see above)"
 fi
 
-echo "PASS: boot order boot:10 -> OTA-restore:10 -> cfg-recovery:11 -> firewall/mwan3:19 -> network:20 -> apid:99, an every-boot OTA restore, an unfailable generation recovery, ungated rc.common, and $scanned product shell scripts that invoke no command this rootfs lacks"
+echo "PASS: boot order boot:10 -> OTA-restore:10 -> cfg-recovery:11 -> IPsec IPv4:12 -> firewall/mwan3:19 -> network:20 -> apid:99, an every-boot OTA restore, an unfailable generation recovery, ungated rc.common, and $scanned product shell scripts that invoke no command this rootfs lacks"

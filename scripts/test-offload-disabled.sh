@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_DIR=${BPIR_BUILD_DIR:-$(dirname "$SCRIPT_DIR")}
-FEEDS_DIR=${BPIR_FEEDS_DIR:-$(dirname "$BUILD_DIR")/bpirouter-feeds}
+FEEDS_DIR=${BPIR_FEEDS_DIR:-$BUILD_DIR/feeds/bpirouter}
 INIT_SCRIPT="$FEEDS_DIR/net/bpirouter-base/files/etc/uci-defaults/13-bpirouter-offload-disabled"
 BASE_MAKEFILE="$FEEDS_DIR/net/bpirouter-base/Makefile"
 UI_MAKEFILE="$FEEDS_DIR/net/bpirouter-ui/Makefile"
@@ -212,13 +212,8 @@ for board in bpi-r3-mini bpi-r3 bpi-r4-lite bpi-r4-pro bpi-r4 openwrt-one; do
 	grep -Eq '^CONFIG_PACKAGE_bpirouter-base=y$' "$config" || fail "$board omits bpirouter-base"
 	grep -Eq '^CONFIG_PACKAGE_bpirouter-ui=y$' "$config" || fail "$board omits bpirouter-ui"
 done
-for gate in "$BUILD_DIR/scripts/build-full.sh" "$BUILD_DIR/scripts/build-image.sh"; do
+for gate in "$BUILD_DIR/scripts/build-full.sh"; do
 	grep -Fq '"$SCRIPT_DIR/test-offload-disabled.sh"' "$gate" || \
 		fail "$(basename "$gate") does not run the offload gate"
 done
-for driver in mt7915e mt7996e; do
-	grep -Fq "'$driver wed_enable=0'" "$BUILD_DIR/scripts/build-image.sh" ||
-		fail "quick ImageBuilder overlay does not disable WED for $driver"
-done
-
 echo "PASS: v1.5 offload migration, WED policy, zero-write idempotence, failure rollback, and six-board bandwidth dependency contract"

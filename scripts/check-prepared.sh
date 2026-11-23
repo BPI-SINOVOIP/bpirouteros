@@ -81,8 +81,8 @@ fi
 
 UI_MODE="$(mval ui_mode)"
 case "$UI_MODE" in
-    source|artifact|none) ;;
-    *) die "marker has no usable ui_mode (got '${UI_MODE:-empty}') — re-run prepare.sh with one of --ui-source / --ui-artifact / --without-proprietary-ui" ;;
+    artifact|none) ;;
+    *) die "marker has no usable ui_mode (got '${UI_MODE:-empty}') — re-run prepare.sh with one of --ui-artifact / --without-proprietary-ui" ;;
 esac
 
 # The mode has to agree with what the tree will actually build. Every board

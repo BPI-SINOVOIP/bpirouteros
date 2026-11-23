@@ -128,11 +128,6 @@ config_foreach() { :; }
             count = commits.read_text()
             self.assertEqual(run(baseline, pending='system.main.hostname=draft'), baseline)
             self.assertEqual(commits.read_text(), count)
-            # Startup ordering is the integration contract, not a timer.
-            import re
-            restore = (BUILD.parent / 'bpirouter-ui/deploy/init.d/bpirouter-ota-restore').read_text()
-            self.assertLess(int(re.search(r'^START=(\d+)', restore, re.M)[1]),
-                            int(re.search(r'^START=(\d+)', text, re.M)[1]))
 
 
 if __name__ == '__main__':

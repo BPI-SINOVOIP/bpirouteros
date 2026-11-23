@@ -24,7 +24,7 @@ board compatibility patches rather than accepted mainline functionality:
 - `931-18-*` supplies the legacy SFP API fallback used by this 6.12 backport;
 - `931-19-*` raises the switch command timeout for the observed hardware.
 
-The stack is vendored for the OpenWrt 25.12.5 source baseline. Its presence is
+The stack was vendored for the OpenWrt 25.12.5 source baseline and applies unchanged on 25.12.6 (v1.6.1). Its presence is
 not itself evidence of R4-Pro runtime acceptance; every baseline or stack
 change must be rebuilt and retested on that board.
 

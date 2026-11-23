@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_DIR=${BPIR_BUILD_DIR:-$(dirname "$SCRIPT_DIR")}
-FEEDS_DIR=${BPIR_FEEDS_DIR:-$(dirname "$BUILD_DIR")/bpirouter-feeds}
+FEEDS_DIR=${BPIR_FEEDS_DIR:-$BUILD_DIR/feeds/bpirouter}
 SOURCE="$FEEDS_DIR/net/bpirouter-base/files"
 PATCH="$BUILD_DIR/patches/common/base-files/z13-bpirouter-factory-reset-button.patch"
 TMP=$(mktemp -d -t bpir-fr1-rootfs-XXXXXX)
@@ -80,7 +80,7 @@ make_root "$ROOT"
 sed -i '/physical factory reset accepted/d' "$ROOT/usr/bin/bpirouter-apid"
 must_refuse "$SCRIPT_DIR/check-factory-reset-rootfs.sh" "$ROOT"
 
-for gate in "$BUILD_DIR/scripts/build-image.sh" "$BUILD_DIR/scripts/build-full.sh"; do
+for gate in "$BUILD_DIR/scripts/build-full.sh"; do
 	grep -Fq 'test-factory-reset-rootfs.sh' "$gate" || fail "$(basename "$gate") omits FR-1 source gate"
 	grep -Fq 'check-factory-reset-rootfs.sh' "$gate" || fail "$(basename "$gate") omits FR-1 assembled-root gate"
 done

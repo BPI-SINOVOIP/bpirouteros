@@ -89,7 +89,7 @@ if [ -f "$1" ]; then
 	fi
 fi
 
-for gate in "$BUILD_DIR/scripts/build-full.sh" "$BUILD_DIR/scripts/build-image.sh"; do
+for gate in "$BUILD_DIR/scripts/build-full.sh"; do
 	grep -Fq '"$SCRIPT_DIR/test-netifd-dynamic-ip6assign.sh"' "$gate" ||
 		fail "$(basename "$gate") omits the netifd dynamic ip6assign gate"
 done

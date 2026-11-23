@@ -1,9 +1,9 @@
 # Third-party notices — BpiRouter UI package
 
 These notices cover the third-party software contained in the precompiled
-BpiRouter UI/APID package `bpirouter-ui.apk` version 1.6.0-r1, supplied in this
-directory and installed in BpiRouter v1.6.0 firmware: the management API
-program `bpirouter-apid` and the web interface under `/www/bpirouter/`.
+BpiRouter UI/APID package `bpirouter-ui.apk` supplied in this directory and
+installed in BpiRouter firmware: the management API program `bpirouter-apid`
+and the web interface under `/www/bpirouter/`.
 
 The list is taken from the delivered build: the module information recorded in
 the `bpirouter-apid` binary, and the modules actually bundled into the web
@@ -49,7 +49,7 @@ whole, which is licensed under [LICENSE](LICENSE).
 | `vueuc` | 0.4.65 | MIT | Web interface |
 | `vite` | 5.4.21 | MIT | Web interface (bundled runtime helpers) |
 | `@vitejs/plugin-vue` | 5.2.4 | MIT | Web interface (bundled runtime helpers) |
-| `Go standard library` | go1.27.1 | BSD-3-Clause | bpirouter-apid (statically linked) |
+| `Go standard library` | go1.27.4 | BSD-3-Clause | bpirouter-apid (statically linked) |
 | `github.com/golang-jwt/jwt/v5` | v5.2.2 | MIT | bpirouter-apid (statically linked) |
 | `github.com/tredoe/osutil/user/crypt` | v1.5.0 | BSD-2-Clause | bpirouter-apid (statically linked) |
 
@@ -1029,7 +1029,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### Go standard library go1.27.1 (BSD-3-Clause)
+### Go standard library go1.27.4 (BSD-3-Clause)
 
 ```text
 Copyright 2009 The Go Authors.

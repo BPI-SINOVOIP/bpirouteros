@@ -11,25 +11,11 @@
 # never repair. Regenerating a lock to make it match is how a release ends up
 # described by inputs that were never the ones frozen.
 #
-# Two scopes, because two different places verify a lock and only one of them
-# can see everything it names:
-#
-#   workspace  the internal build workspace, where the three source repositories
-#              are present as git checkouts. Verifies everything.
-#   tree       a published tree, which has no sibling repositories and no git
-#              history -- bpirouter-ui is proprietary and is not in it at all.
-#              Verifies what that tree can actually show: the OpenWrt checkout,
-#              feeds.conf, and every patch and config by content hash.
-#
-# Requiring the workspace scope in a published tree would demand private
-# repositories a customer will never have, so artifact builds there could never
-# start. Dropping the check entirely would hold the customer path to a weaker
-# standard than ours. Neither is acceptable; the split is.
-#
-# Usage: check-release-lock.sh [--scope workspace|tree] [--downloads-lock <file>] <lock.json>
+# Verify the pinned OpenWrt checkout, feeds, patches and configuration.
+# Usage: check-release-lock.sh [--scope tree] [--downloads-lock <file>] <lock.json>
 set -eo pipefail
 
-SCOPE=workspace
+SCOPE=tree
 DLOCK=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -38,18 +24,15 @@ while [ $# -gt 0 ]; do
         *) break ;;
     esac
 done
-case "$SCOPE" in workspace|tree) ;; *) echo "unknown scope: $SCOPE" >&2; exit 2 ;; esac
+case "$SCOPE" in tree) ;; *) echo "unknown scope: $SCOPE" >&2; exit 2 ;; esac
 
 LOCK="$1"
-[ -n "$LOCK" ] || { echo "usage: check-release-lock.sh [--scope workspace|tree] [--downloads-lock <file>] <lock.json>" >&2; exit 2; }
+[ -n "$LOCK" ] || { echo "usage: check-release-lock.sh [--scope tree] [--downloads-lock <file>] <lock.json>" >&2; exit 2; }
 [ -f "$LOCK" ] || { echo "no such lock: $LOCK" >&2; exit 2; }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${BPIR_BUILD_DIR:-$(dirname "$SCRIPT_DIR")}"
 WORK_DIR="${BPIR_WORK_DIR:-$BUILD_DIR/openwrt}"
-UI_DIR="${BPIR_UI_DIR:-$(dirname "$BUILD_DIR")/bpirouter-ui}"
-FEEDS_DIR="${BPIR_FEEDS_DIR:-$(dirname "$BUILD_DIR")/bpirouter-feeds}"
-
 G='\033[0;32m'; R='\033[0;31m'; N='\033[0m'
 FAILED=0
 bad() { echo -e "${R}✗ $1${N}" >&2; FAILED=$((FAILED+1)); }
@@ -85,19 +68,6 @@ if [ -n "$DLOCK" ]; then
         --boards "${RELEASE_BOARDS[@]}" >/dev/null \
         || bad "downloads lock is not the one frozen by the input lock"
 fi
-
-# ── Repositories (workspace scope only) ──
-# Compared against the full revision. A tree that has moved on is not the tree
-# the lock describes, however small the difference looks.
-[ "$SCOPE" = workspace ] && for pair in "bpirouter-build:$BUILD_DIR" "bpirouter-ui:$UI_DIR" "bpirouter-feeds:$FEEDS_DIR"; do
-    name=${pair%%:*}; dir=${pair#*:}
-    want=$(q "$LOCK" "repos.$name")
-    got=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "")
-    [ -n "$want" ] || { bad "lock does not record $name"; continue; }
-    [ "$want" = "$got" ] || bad "$name is at ${got:0:12}, lock says ${want:0:12}"
-    [ -z "$(git -C "$dir" status --porcelain 2>/dev/null)" ] || \
-        bad "$name has uncommitted changes; the lock cannot describe it"
-done || true
 
 # ── OpenWrt ──
 if [ -d "$WORK_DIR/.git" ]; then

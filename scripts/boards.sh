@@ -56,13 +56,6 @@ pkg_arch() {
 # OpenWrt actually consults. Deriving it here means the staging path and the
 # path the build reads cannot disagree -- they have one source.
 #
-# Two layouts exist and both are legitimate: internally the feed is a sibling
-# repository (../bpirouter-feeds), and in a published tree it lives inside
-# (feeds/bpirouter). stage-proprietary-ui.sh had the sibling path hardcoded, so
-# in a published tree it unpacked the artifact into a directory outside the tree
-# while the build read an empty files/ inside it -- staging reported success and
-# the image had no UI.
-#
 # src-link values are relative to openwrt/feeds/.
 feed_dir() {
     local build_dir conf link
@@ -95,12 +88,17 @@ VALID_BOARDS="bpi-r4  bpi-r4-lite  bpi-r3  bpi-r3-mini  openwrt-one  bpi-r4-pro"
 # is selected by the release-specific board set below; the lock must match it.
 PLANNED_BOARDS="bpi-r4-pro-4e"
 
-# Product v1.5.0 and v1.6.0 include seven SKUs in RC and stable releases.
-# Admission does not claim hardware acceptance or clear known issues.
+# Every release from v1.5.0 on, RC and stable, includes all seven SKUs. The set
+# only grows (owner 2026-11-16): a new board joins through the planned path and
+# none is ever dropped, so admission is a version floor, not a list of releases.
+# Earlier releases keep their six-board set. Admission does not claim hardware
+# acceptance or clear known issues.
 bpir_select_release_boards() {
     VALID_BOARDS="bpi-r4 bpi-r4-lite bpi-r3 bpi-r3-mini openwrt-one bpi-r4-pro"
     PLANNED_BOARDS="bpi-r4-pro-4e"
-    if [[ "$1" =~ ^v1\.[56]\.0(-rc[1-9][0-9]*)?$ ]]; then
+    local n='(0|[1-9][0-9]*)'
+    if [[ "$1" =~ ^v$n\.$n\.$n(-rc[1-9][0-9]*)?$ ]] &&
+        (( BASH_REMATCH[1] > 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] >= 5) )); then
         VALID_BOARDS+=" bpi-r4-pro-4e"
         PLANNED_BOARDS=""
     fi

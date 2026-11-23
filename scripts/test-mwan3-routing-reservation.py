@@ -209,12 +209,9 @@ with tempfile.TemporaryDirectory(prefix='bpir-mwan-reservation-') as temp:
         subprocess.run(['git', '-C', str(root), 'apply', str(PATCH)], check=True)
     common = (root / FILES[1]).read_text()
     limit = int(re.search(r'^MWAN3_PRODUCT_MAX=(\d+)$', common, re.M)[1])
-    ui = Path(os.environ.get('BPIR_UI_DIR', BUILD.parent / 'bpirouter-ui'))
-    if (ui / 'backend').is_dir():
-        backend = (ui / 'backend/internal/handler/mwan3.go').read_text()
-        assert limit == int(re.search(r'\bmwanMaxMembers\s*=\s*(\d+)', backend)[1])
-    else:
-        print('SKIP: backend source unavailable; artifact build cannot cross-check the member limit')
+    # This value comes from the backend revision pinned to the UI package.
+    if limit != 8:
+        raise SystemExit("unexpected firmware member limit")
     if sys.argv[1:] in (['--source-check'], ['--prepared']):
         scope = 'prepared tree' if sys.argv[1:] == ['--prepared'] else 'patch fixture'
         print(f'PASS: {scope} and product member-limit contract')

@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bpirouter-base
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -13,6 +13,10 @@ define Package/bpirouter-base
   TITLE:=BpiRouter default configuration
   PKGARCH:=all
   DEPENDS:=+mwan3 +flock
+  # This feed is linked from outside the OpenWrt tree, so the default package
+  # origin would be the builder's absolute checkout path. Record the path the
+  # buildroot itself uses for feed packages instead.
+  SOURCE:=feeds/bpirouter/net/bpirouter-base
 endef
 
 define Package/bpirouter-base/description
@@ -36,6 +40,9 @@ define Package/bpirouter-base/install
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-bpirouter-defaults $(1)/etc/uci-defaults/
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) ./files/usr/libexec/bpirouter-factory-reset-button $(1)/usr/libexec/
+	$(INSTALL_BIN) ./files/usr/libexec/bpirouter-ipsec-ipv4 $(1)/usr/libexec/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/bpirouter-ipsec-ipv4 $(1)/etc/init.d/
 	$(INSTALL_DATA) ./files/usr/libexec/bpirouter-mwan3-strict.awk $(1)/usr/libexec/
 	$(INSTALL_DATA) ./files/usr/libexec/bpirouter-sqm-strict.awk $(1)/usr/libexec/
 	$(INSTALL_DIR) $(1)/etc

@@ -105,6 +105,20 @@ start() {
 SH
 	chmod +x "$ROOT/etc/init.d/bpirouter-cfg-recovery"
 	ln -sf ../init.d/bpirouter-cfg-recovery "$ROOT/etc/rc.d/S11bpirouter-cfg-recovery"
+	cat >"$ROOT/etc/init.d/bpirouter-ipsec-ipv4" <<'SH'
+#!/bin/sh /etc/rc.common
+START=12
+PROG=${BPIR_IPSEC_IPV4_PROG:-/usr/libexec/bpirouter-ipsec-ipv4}
+boot() {
+	"$PROG" || true
+}
+start() { return 0; }
+stop() { return 0; }
+SH
+	chmod +x "$ROOT/etc/init.d/bpirouter-ipsec-ipv4"
+	printf '#!/bin/sh\nexit 0\n' >"$ROOT/usr/libexec/bpirouter-ipsec-ipv4"
+	chmod +x "$ROOT/usr/libexec/bpirouter-ipsec-ipv4"
+	ln -sf ../init.d/bpirouter-ipsec-ipv4 "$ROOT/etc/rc.d/S12bpirouter-ipsec-ipv4"
 	ln -sf ../init.d/boot "$ROOT/etc/rc.d/S10boot"
 	ln -sf ../init.d/bpirouter-ota-restore "$ROOT/etc/rc.d/S10bpirouter-ota-restore"
 	ln -sf ../init.d/firewall "$ROOT/etc/rc.d/S19firewall"
@@ -126,6 +140,9 @@ SH
 	printf '%s\n' 'mt7915e wed_enable=0' >"$ROOT/etc/modules.d/mt7915e"
 	: >"$ROOT/lib/modules/6.12-test/mt7915e.ko"
 	for module in sch_htb sch_ingress cls_matchall act_mirred ifb; do
+		: >"$ROOT/lib/modules/6.12-test/$module.ko"
+	done
+	for module in nft_tproxy nft_socket usb-storage uas exfat ntfs3 nf_conntrack_netlink r8152 ax88179_178a ftdi_sio cp210x ch341 pl2303 cdc-acm zram; do
 		: >"$ROOT/lib/modules/6.12-test/$module.ko"
 	done
 	: >"$ROOT/usr/libexec/bpirouter-mwan3-strict.awk"
@@ -162,6 +179,16 @@ must_refuse_with_path() {
 build_rootfs
 must_pass "a well-formed rootfs was rejected"
 
+FEEDS=https://downloads.openwrt.org/releases/25.12.6/packages/aarch64_cortex-a53
+build_rootfs
+mkdir -p "$ROOT/etc/apk/repositories.d"
+printf '%s/base/packages.adb\n%s/luci/packages.adb\n' "$FEEDS" "$FEEDS" \
+	>"$ROOT/etc/apk/repositories.d/distfeeds.list"
+must_pass "an apk list of published feeds was rejected"
+printf '%s/bpirouter/packages.adb\n' "$FEEDS" >>"$ROOT/etc/apk/repositories.d/distfeeds.list"
+must_refuse "an apk list naming the unpublished bpirouter feed was accepted"
+grep -Fq 'unpublished bpirouter feed' "$WORK/out" || fail "wrong rejection for the bpirouter feed"
+
 for path in etc/config/tailscale usr/sbin/tailscaled \
 	usr/share/nftables.d/ruleset-pre/90-bpirouter-s2s.nft; do
 	build_rootfs
@@ -196,7 +223,7 @@ grep -Fq "usage:" "$WORK/out" ||
 # imitation: the point is that this exact shipped file is caught.
 build_rootfs
 DELETED=net/bpirouter-base/files/lib/bpirouter/d21-preflight.sh
-FEEDS_DIR=${BPIR_FEEDS_DIR:-$(dirname "$BUILD_DIR")/bpirouter-feeds}
+FEEDS_DIR=${BPIR_FEEDS_DIR:-$BUILD_DIR/feeds/bpirouter}
 if git -C "$FEEDS_DIR" rev-parse --verify HEAD >/dev/null 2>&1 &&
 	git -C "$FEEDS_DIR" show "HEAD:$DELETED" >"$ROOT/lib/bpirouter/bpirouter-d21-preflight.sh" 2>/dev/null &&
 	[ -s "$ROOT/lib/bpirouter/bpirouter-d21-preflight.sh" ]; then
@@ -399,6 +426,68 @@ rm -f "$ROOT/lib/modules/6.12-test/cls_matchall.ko"
 must_refuse "the gate accepted a rootfs without the aggregate matchall classifier"
 
 build_rootfs
+rm -f "$ROOT/lib/modules/6.12-test/usb-storage.ko"
+must_refuse "the gate accepted a rootfs without the USB storage module"
+grep -Fq 'user kernel module usb-storage.ko is absent' "$WORK/out" || fail "wrong rejection for a missing user module"
+build_rootfs
+rm "$ROOT/etc/rc.d/S12bpirouter-ipsec-ipv4"
+must_refuse "the gate accepted a rootfs that never runs the IPsec IPv4 restriction"
+build_rootfs
+sed -i 's/^START=12$/START=20/' "$ROOT/etc/init.d/bpirouter-ipsec-ipv4"
+must_refuse "the gate accepted an IPsec IPv4 restriction that runs after the firewall"
+build_rootfs
+sed -i 's/"$PROG" || true/"$PROG"/' "$ROOT/etc/init.d/bpirouter-ipsec-ipv4"
+must_refuse "the gate accepted an IPsec IPv4 init whose failure can fail the boot"
+build_rootfs
+# The helper call moved to start(): the line is still there, the boot runs nothing.
+sed -i -e 's/^\t"$PROG" || true$/\treturn 0/' -e 's/^start() { return 0; }$/start() { "$PROG" || true; }/' \
+	"$ROOT/etc/init.d/bpirouter-ipsec-ipv4"
+grep -Fq 'start() { "$PROG" || true; }' "$ROOT/etc/init.d/bpirouter-ipsec-ipv4" || fail "start() mutation did not apply"
+must_refuse "the gate accepted an IPsec IPv4 init that never runs its helper at boot"
+grep -Fq 'does not run its helper at boot' "$WORK/out" || fail "wrong rejection for a boot without the helper"
+
+# build_rootfs reuses the global name `module`, so this loop must not.
+for forbidden in ipheth br_netfilter; do
+	build_rootfs
+	: >"$ROOT/lib/modules/6.12-test/$forbidden.ko"
+	must_refuse "the gate accepted a rootfs carrying $forbidden.ko"
+	grep -Fq "forbidden kernel module $forbidden.ko is present" "$WORK/out" || fail "wrong rejection for $forbidden.ko"
+done
+
+# An image built without the UI package gets the base gate on its own: it must
+# pass without the UI payload and still refuse what every image needs.
+BASE_GATE="$SCRIPT_DIR/check-rootfs-base.sh"
+no_ui_rootfs() {
+	build_rootfs
+	rm -f "$ROOT/usr/bin/bpirouter-apid" "$ROOT/etc/init.d/bpirouter-api" "$ROOT/etc/rc.d/S99bpirouter-api" \
+		"$ROOT/etc/init.d/bpirouter-ota-restore" "$ROOT/usr/libexec/bpirouter-ota-restore" \
+		"$ROOT/etc/init.d/bpirouter-cfg-recovery"
+}
+no_ui_rootfs
+"$GATE" "$ROOT" >/dev/null 2>&1 && fail "fixture: the full gate accepted a rootfs without the UI payload"
+"$BASE_GATE" "$ROOT" >"$WORK/out" 2>&1 || { cat "$WORK/out" >&2; fail "the base gate refused a rootfs without the UI payload"; }
+for case in module link distfeeds; do
+	no_ui_rootfs
+	case $case in
+		module) rm -f "$ROOT/lib/modules/6.12-test/zram.ko" ;;
+		link) rm "$ROOT/etc/rc.d/S12bpirouter-ipsec-ipv4" ;;
+		distfeeds)
+			mkdir -p "$ROOT/etc/apk/repositories.d"
+			printf '%s/bpirouter/packages.adb\n' "$FEEDS" >"$ROOT/etc/apk/repositories.d/distfeeds.list" ;;
+	esac
+	if "$BASE_GATE" "$ROOT" >"$WORK/out" 2>&1; then
+		fail "the base gate accepted a rootfs without the UI payload and a broken $case"
+	fi
+done
+# build-full runs it when there is no UI package, inside the UI-mode branch's else.
+awk '/^if \[ "\$UI_MODE" != none \]; then$/ { inside = 1 }
+	inside && /^else$/ { other = 1 }
+	inside && other && /check-rootfs-base\.sh" "\$ASSEMBLED_ROOT"/ { found = 1 }
+	inside && /^fi$/ { exit }
+	END { exit !found }' "$SCRIPT_DIR/build-full.sh" ||
+	fail "build-full does not run the base gate for an image without the UI package"
+
+build_rootfs
 rm -f "$ROOT/etc/rc.d/S99bpirouter-api"
 must_refuse "the gate accepted a rootfs where apid is never started"
 
@@ -437,17 +526,6 @@ for notice in LICENSE tailscale.md go.mod go.sum modules.txt; do
 	build_rootfs
 	rm "$ROOT/usr/share/tailscale/$notice"
 	must_refuse "the gate accepted a missing Tailscale notice or dependency record: $notice"
-done
-
-# Quick mode must refuse before preparation, downloads or image assembly.
-# The official ImageBuilder cannot provide the product's patched Tailscale.
-BUILD_IMAGE="$SCRIPT_DIR/build-image.sh"
-for board in bpi-r4 openwrt-one; do
-	if bash "$BUILD_IMAGE" --board "$board" >"$WORK/quick-refusal" 2>&1; then
-		fail "quick ImageBuilder unexpectedly accepted $board"
-	fi
-	grep -Fq "Quick ImageBuilder builds are unsupported" "$WORK/quick-refusal" ||
-		fail "quick mode failed after reaching an unrelated prerequisite"
 done
 
 echo "PASS: rootfs integrity gate reproduces the missing-command defect, tolerates shell that is not an external command, and still guards boot order and an ungated rc.common"

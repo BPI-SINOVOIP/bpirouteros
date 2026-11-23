@@ -160,14 +160,21 @@ original firmware provides the same USB installation procedure.
 
 ## 4. First login
 
-1. Connect the computer to a LAN port, not WAN. Set the computer to obtain its
-   address automatically. Avoid another router using `192.168.100.1` on the
-   same network.
+1. Connect the computer to a LAN port with a network cable, not WAN. From
+   v1.6.1, Wi-Fi is off on a new or reset router until you set a Wi-Fi password,
+   so first setup needs a cable; a computer without an Ethernet port needs a USB
+   Ethernet adapter. Earlier versions start Wi-Fi with a shared factory password;
+   skipping Wi-Fi setup leaves that password unchanged, even after the wizard is
+   completed. Set the computer to obtain its address automatically. Avoid another
+   router using `192.168.100.1` on the same network.
 2. Open `https://192.168.100.1`. If the browser warns about the local certificate,
    confirm that you are connected to your own router before proceeding.
-3. Complete initial setup and choose new administrator and Wi-Fi passwords.
-   Do not reuse example passwords. A complete fresh installation should offer
-   initial setup rather than require the previous installation's password.
+3. Complete initial setup. From v1.6.1, check the country or region and the
+   time zone, which are filled in from your browser. Choose a new administrator password and, if
+   you want Wi-Fi now, a Wi-Fi password of your own; you can also skip Wi-Fi and
+   turn it on later in **Network → LAN & Wi-Fi**. Do not reuse example passwords.
+   A complete fresh installation should offer initial setup rather than require
+   the previous installation's password.
 4. Check the model and BpiRouter product version in Home or System. Connect the
    Internet cable or enable the phone's USB tethering, then check Internet access
    from your computer. Read the [feature guide](FEATURES.md) before configuring

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Single source of truth for bootstrapping the OpenWrt source checkout.
 
-BPIR_OPENWRT_GIT_REF="v25.12.5"
-BPIR_OPENWRT_GIT_COMMIT="f0a60eee2fe051741c643ea6118718aae1ef17fb"
+BPIR_OPENWRT_GIT_REF="v25.12.6"
+BPIR_OPENWRT_GIT_COMMIT="64900e756efa667774214f9c6b17c113222e01f7"
 BPIR_OPENWRT_DEFAULT_CLONE_URL="https://github.com/openwrt/openwrt.git"
 
 # Git searches parent directories for .git. `--is-inside-work-tree` alone would
@@ -61,45 +61,4 @@ bpir_reset_openwrt_source() {
         package/network/config/firewall4/patches/910-bpirouter-s2s-lock-boundary.patch \
         package/network/utils/uqmi/patches/100-fix-ctl-data-format-request.patch \
         >/dev/null 2>&1 || return 1
-}
-
-# A development workspace is allowed to advance its disposable OpenWrt source
-# checkout to the baseline declared by this build tree. This must run under the
-# shared OpenWrt mutation lock and before the coordinator records provenance.
-# Formal builds do not call it: their input lock, rather than a moving checkout,
-# is the authority and any mismatch must fail closed.
-bpir_sync_openwrt_development_source() {
-    local work_dir="$1"
-    local clone_url="${BPIR_OPENWRT_CLONE_URL:-$BPIR_OPENWRT_DEFAULT_CLONE_URL}"
-    local resolved=""
-
-    bpir_is_exact_openwrt_worktree "$work_dir" || {
-        echo "cannot synchronize a non-OpenWrt checkout: $work_dir" >&2
-        return 1
-    }
-
-    # The old marker describes the old HEAD and becomes false as soon as source
-    # cleanup or checkout starts. Drop it before either mutation.
-    rm -f -- "$work_dir/.bpirouter-prepared-board"
-    bpir_reset_openwrt_source "$work_dir" || return 1
-
-    resolved=$(git -C "$work_dir" rev-parse --verify "$BPIR_OPENWRT_GIT_REF^{commit}" 2>/dev/null || true)
-    if [ -z "$resolved" ]; then
-        # Keep the real tag ref, not only FETCH_HEAD: OpenWrt's version logic
-        # uses Git describe and must report v25.12.5 after an in-place upgrade.
-        git -C "$work_dir" fetch --depth 1 "$clone_url" \
-            "refs/tags/$BPIR_OPENWRT_GIT_REF:refs/tags/$BPIR_OPENWRT_GIT_REF" \
-            || return 1
-        resolved=$(git -C "$work_dir" rev-parse --verify "$BPIR_OPENWRT_GIT_REF^{commit}" 2>/dev/null || true)
-    fi
-    [ "$resolved" = "$BPIR_OPENWRT_GIT_COMMIT" ] || {
-        echo "OpenWrt $BPIR_OPENWRT_GIT_REF resolved to ${resolved:-nothing}; expected $BPIR_OPENWRT_GIT_COMMIT" >&2
-        return 1
-    }
-
-    git -C "$work_dir" checkout --detach -q "$BPIR_OPENWRT_GIT_COMMIT" || return 1
-    bpir_is_exact_openwrt_worktree "$work_dir" || {
-        echo "OpenWrt checkout lost its source skeleton after synchronization: $work_dir" >&2
-        return 1
-    }
 }

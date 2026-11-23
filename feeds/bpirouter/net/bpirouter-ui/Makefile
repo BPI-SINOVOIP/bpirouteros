@@ -32,6 +32,10 @@ define Package/bpirouter-ui
 # neither. Dropping this dependency is a separate change that has to be proven
 # per board against a real dial, not folded into the AT-ownership work.
   DEPENDS:=+nginx-ssl +nginx-ssl-util +openssl-util +wireguard-tools +qrencode +jsonfilter +openvpn-openssl +uboot-envtools +lsblk +ddns-scripts +ddns-scripts-noip +ddns-scripts-cloudflare +sqm-scripts +comgt +kmod-usb-serial-option +tailscale +bpirouter-base
+  # This feed is linked from outside the OpenWrt tree, so the default package
+  # origin would be the builder's absolute checkout path. Record the path the
+  # buildroot itself uses for feed packages instead.
+  SOURCE:=feeds/bpirouter/net/bpirouter-ui
 endef
 
 define Package/bpirouter-ui/description

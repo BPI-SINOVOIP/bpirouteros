@@ -28,10 +28,18 @@ port may receive with errors.
 
 ## Get started
 
-After installation, connect a computer to a LAN port and open
-`https://192.168.100.1`. Complete the setup wizard and choose your administrator
-and Wi-Fi passwords. The interface offers English and Chinese, light and dark
-themes, and layouts for computers and phones.
+After installation, connect a computer to a LAN port with a network cable and
+open `https://192.168.100.1`. From v1.6.1, Wi-Fi is off on a new or reset router
+until you set a Wi-Fi password, so first setup needs a cable; a computer without
+an Ethernet port needs a USB Ethernet adapter. v1.6.0 and earlier start Wi-Fi with
+a shared factory password; skipping Wi-Fi setup leaves that password unchanged,
+even after the wizard is completed. Update to v1.6.1 or later.
+From v1.6.1, the setup wizard fills in the country or region and the time zone
+from your browser: check them, then choose your
+administrator password and, if you want Wi-Fi now, a Wi-Fi password of your own.
+If you skip Wi-Fi, turn it on later in **Network → LAN & Wi-Fi**. The interface
+offers English and Chinese, light and dark themes, and layouts for computers and
+phones.
 
 Find the product version in **Home → System** or at the top of **System**.
 Check that it matches the version you installed. The separately listed OpenWrt
@@ -45,8 +53,8 @@ assume which release is installed.
 | Home | See Internet status, traffic, connected devices, Wi-Fi and router resource use. |
 | Network | Configure Internet connections, LAN addressing, Wi-Fi, mobile modules, USB sharing, Multi-WAN and WAN bandwidth shaping. |
 | Devices | Identify connected devices, give them names, and allow or block their access. |
-| Segments | Set up separate Guest and IoT Wi-Fi networks, their access rules and shared bandwidth limits. |
-| Advanced | Configure remote networking, DNS filtering, access schedules, port forwarding, firewall rules, VPN and dynamic DNS; use network diagnostics. |
+| Segments | Set up separate Guest and IoT Wi-Fi networks, their access rules, DNS settings and shared bandwidth limits. |
+| Advanced | Configure remote networking, port forwarding, firewall rules, VPN and dynamic DNS; use network diagnostics. |
 | System | Change the router name, time and password; back up or restore settings, manage firmware, reboot or reset the router. |
 | Users | Manage administrator, operator and read-only accounts. Administrator access is required. |
 
@@ -59,7 +67,11 @@ You can also use a compatible mobile module or a phone with USB tethering enable
 On the BPI-R4 Pro (8X/4E), connect the phone or USB dongle to the USB 3.2 port; the board's USB 2.0
 port is not available in this release.
 
-Edit a Wi-Fi network to change its name, password and radio settings. Only the
+Edit a Wi-Fi network to change its name, password and radio settings. From
+v1.6.1, a password-protected network can only be turned on with a password of your own;
+the shared factory password of earlier versions is not accepted. If a router
+updated with its settings kept still uses that shared password, which is public,
+Home and Network show a warning: set your own Wi-Fi password. Only the
 bands fitted to your board are available. Channel and 6 GHz availability depend
 on your country setting and client support. Changing Wi-Fi settings can disconnect
 wireless clients; use a wired connection when making these changes.
@@ -121,8 +133,12 @@ one Wi-Fi network.
 
 In **Devices**, use Allow or Block to change a device's access. A device name or
 address is a management aid, not proof of who is using it. Access schedules and
-DNS filtering are available in **Advanced**; DNS filtering cannot block every
-application or every way of reaching a website.
+DNS filtering (blocking by domain name) are not available in this release.
+
+For the Guest or IoT network, **Segments** can set the DNS servers its clients
+use, force clients to use those servers, and block encrypted DNS on port 853
+(DoT and DoQ). DNS-over-HTTPS cannot be blocked here: apps that use it bypass
+these settings.
 
 ### Remote networking with Tailscale
 
@@ -217,8 +233,21 @@ on incoming connections.
 Dynamic DNS associates a domain with your changing Internet address. Choose
 DuckDNS, No-IP, Dynu, Cloudflare or FreeDNS and fill in the credentials requested
 for that provider. Requesting an update does not guarantee provider acceptance;
-check the domain before relying on it for remote access. Dynamic DNS does not
-make an otherwise unreachable connection reachable.
+check the domain before relying on it for remote access. If the router is
+connected behind another router, choose **Public address lookup** as the IP
+address source; the WAN interface address is then a private address. Dynamic DNS
+does not make an otherwise unreachable connection reachable.
+
+From v1.6.1, the page shows the result of the latest update (succeeded, failed or
+unknown), the time of the last successful update and the registered address (the
+one the provider just accepted, or what the last check found in DNS); **Update now** sends an update to the provider even when the
+address has not changed, and the public address lookup and the updates to every
+listed provider are sent over HTTPS.
+For Cloudflare, enter the full name of the record to update (for example
+`home.example.com`; the router finds the zone itself), `Bearer` as the username
+and an API token as the token. The token needs **DNS Edit** and **Zone Read**
+permission for that zone. Create the A record in Cloudflare first and leave it
+unproxied (DNS only).
 
 Only expose services you intend to make public when configuring port forwarding
 or firewall rules. Keep an alternative way to access the router while changing
@@ -272,6 +301,16 @@ administrator password. Do not change the same setting in both interfaces.
 LuCI does not include Multi-WAN or WAN bandwidth shaping; manage them only in
 BpiRouter. Changing them elsewhere may cause configuration conflicts or errors,
 and BpiRouter does not guarantee automatic recovery.
+
+From v1.6.1, the firmware includes kernel support for some software you may install yourself
+through LuCI or `apk`: USB storage (including exFAT and NTFS), common USB
+Ethernet adapters (Realtek RTL8152/RTL8153, ASIX AX88179), USB serial adapters
+(FTDI, CP210x, CH341, PL2303 and CDC ACM, as used by Zigbee and Thread dongles),
+compressed memory swap (zram), and the firewall features used by transparent
+proxies. BpiRouter does not manage these devices: a USB Ethernet adapter is not
+offered as an Internet connection or listed with the router's ports (configure
+it in LuCI), and USB storage is not mounted automatically. Packages you install
+yourself are not kept by a firmware update; install them again afterwards.
 
 For product support, contact [Banana Pi](https://www.banana-pi.org/contact-us/)
 or use its [official forum](https://forum.banana-pi.org/). Provide your exact

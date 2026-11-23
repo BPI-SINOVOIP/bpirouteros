@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "release": "v1.6.0",
+  "release": "v1.6.1",
   "test_only": false,
-  "generated_at": "2026-11-12T12:01:29+10:00",
-  "downloads_lock_sha256": "c548d98438c2f6c03291a9fb143e322306cef2ba228f8b22974bcf05acc9e865",
+  "generated_at": "2026-11-23T17:17:36+10:00",
+  "downloads_lock_sha256": "e031891920847ff7af08f44996343f6e62f2aab77ca3c4875d768d9e26a3d664",
   "boards": [
     "bpi-r4",
     "bpi-r4-lite",
@@ -15,24 +15,24 @@
   ],
   "openwrt": {
     "url": "https://github.com/openwrt/openwrt.git",
-    "tag": "v25.12.5",
-    "commit": "f0a60eee2fe051741c643ea6118718aae1ef17fb"
+    "tag": "v25.12.6",
+    "commit": "64900e756efa667774214f9c6b17c113222e01f7"
   },
   "feeds": [
-    {"name": "packages", "url": "https://github.com/openwrt/packages.git", "commit": "5caa62e0bc9f7fb9b0c12a23267bceb7724214dd"},
-    {"name": "luci", "url": "https://github.com/openwrt/luci.git", "commit": "128a7812f4be233c5dd7f7466f534fd888785caf"},
-    {"name": "routing", "url": "https://github.com/openwrt/routing.git", "commit": "3d7d0dc7fa43d3eb09498417407e95a6552e5312"},
+    {"name": "packages", "url": "https://github.com/openwrt/packages.git", "commit": "093d551675b1119a06ef224d419905e8d6b2af1a"},
+    {"name": "luci", "url": "https://github.com/openwrt/luci.git", "commit": "75a306df84a020c57a631ef5b4c02ace56d93387"},
+    {"name": "routing", "url": "https://github.com/openwrt/routing.git", "commit": "48c808034414a2112cf9d5261a20a320e8d0d170"},
     {"name": "telephony", "url": "https://github.com/openwrt/telephony.git", "commit": "2618106d5846a4a542fdf5809f0d3ed228ce439b"},
     {"name": "video", "url": "https://github.com/openwrt/video.git", "commit": "094bf58da6682f895255a35a84349a79dab4bf95"}
   ],
   "repos": {
-    "bpirouter-build": "708daee7a90c71ab625fcddffbf84c86942b33c7",
-    "bpirouter-ui": "686a4b89250e49cc298256d0f2f394421f44288b",
-    "bpirouter-feeds": "ffebad5d86e2ff471ca2ee1b79d1cc9b579d08c0"
+    "bpirouter-build": "e098604e87aee595d716a55befb3005dd2ca29a2",
+    "bpirouter-ui": "c4b668948f94703bef2e07574dac6af9a3615664",
+    "bpirouter-feeds": "a9c017496cde06f1d5df6c537ee2f992190e892d"
   },
   "pkg_arch": "aarch64_cortex-a53",
   "ui_artifacts": [
-    {"arch": "aarch64_cortex-a53", "name": "bpirouter-ui", "version": "1.6.0-r1", "file": "bpirouter-ui-1.6.0-r1.apk", "sha256": "e43f6ff1e0fd9aea3e44d0dc7cd01eb6b177e2fadc922e3b40098fbde368c681"}
+    {"arch": "aarch64_cortex-a53", "name": "bpirouter-ui", "version": "1.6.1-r1", "file": "bpirouter-ui-1.6.1-r1.apk", "sha256": "aeb8f7181f9f64a667457dcb2c05e2df21e5462d72b3d15a4faf58723bbc0e2e"}
   ],
   "patches": [
     {"path": "patches/bpi-r3-mini/base-files/011-ab-emmc-recipe.patch", "sha256": "ae65151346679edf25f68c33cae1acc8cbf310ac701f5304c7984adf07cb6c99"},
@@ -194,6 +194,7 @@
     {"path": "patches/common/base-files/008-firewall4-product-lock.patch", "sha256": "4bb7eb47d925e200fc24f2c914942f268ac4bd933ad1321833f52b7e278bdb2d"},
     {"path": "patches/common/base-files/z13-bpirouter-factory-reset-button.patch", "sha256": "844d85141230b332a7e89a262282fab347bf96bedfc08fb16da830077a101bde"},
     {"path": "patches/common/kernel/980-net-ethernet-mtk_eth_soc-scope-DSA-port-queues-to-MediaTek-tag.patch", "sha256": "809862b2c2eaadcc3173afda007f62dd2c1c8f264f7ef01e4b534ea4ec883be0"},
+    {"path": "patches/common/kernel/988-ipv4-free-inet_opt-and-ireq_opt-after-an-RCU-grace-period.patch", "sha256": "2e9c891b1a71ff6147a75bba10b4bf82050ad26865f051720ea6a2c2dbae703e"},
     {"path": "patches/common/kernel/989-mtk-eth-defer-notifier-leak.patch", "sha256": "4b7185b8035d6e83a2522073eed5eabc7a238699f799412a4f72ebadb36e1b1c"},
     {"path": "patches/common/kernel/991-netfilter-nft-rt-clamp-to-ingress-mtu.patch", "sha256": "f552ad570fb8048096df95497197ce151bd00913e841e834180361395686c183"},
     {"path": "patches/common/kernel/992-net-ethernet-mtk-fix-random-mac-log.patch", "sha256": "8df5dcf68f268281c05d4c24c6f6cc56d613e565f174033f5fb66db5ca23b0af"},
@@ -204,16 +205,22 @@
     {"path": "patches/common/openwrt/005-netifd-protocol-script-lifetime.patch", "sha256": "563583c46518243444c17ee9ba46bb0f2c67bb8e57913294f64f09a273c5c6a0"},
     {"path": "patches/common/openwrt/006-netifd-host-route-lifetime.patch", "sha256": "86e11dc1a1cb011041286cad1fffdd69962cb374d63e485512a0f8c5c3620d94"},
     {"path": "patches/common/openwrt/007-netifd-pppoe-parent-mtu.patch", "sha256": "ade239c2eaa648c2a84e293e6ef52ed8df95cf297582151cc8c984d8f08cb10e"},
+    {"path": "patches/common/openwrt/008-wifi-scripts-segment-isolation.patch", "sha256": "2d1c7eb4a3c899187f3a2c86427df5b55a56d2ec05d09274b5ff7d1bb1c24455"},
+    {"path": "patches/common/packages/000-tailscale-keep-1.98.3.patch", "sha256": "69dbb292f81c0459e5ce4ff5c99972dae5ecc8de55410892e6cda0d9042a4bfe"},
     {"path": "patches/common/packages/001-mwan3-refresh-connected-after-route-cleanup.patch", "sha256": "b554f975ca53165e854c9f665f638dc90679b70b05c0303d7db5ee0ed12e69ce"},
     {"path": "patches/common/packages/002-sqm-product-lifecycle-owner.patch", "sha256": "c9ef92cf746116b4441b370bbb444a6dcdb966c88e7df4e75fb723281c426ac4"},
     {"path": "patches/common/packages/003-mwan3-replay-parent-on-dynamic-child-ifup.patch", "sha256": "cc107f812d6fac7e0d4b5f0477090ea513671a7e11c5092300a3e622aa833b79"},
     {"path": "patches/common/packages/004-mwan3-product-routing-reservation.patch", "sha256": "193df17606b4ea0e47c61493bc402ec07ec354705374dda252fb6310b32b2ad7"},
     {"path": "patches/common/packages/005-tailscale-product-routing.patch", "sha256": "41bd11aa554836f91707989d1b38a19feea1713979fc62a8705c5906abf1fc32"},
     {"path": "patches/common/packages/006-tailscale-empty-exit-config.patch", "sha256": "ee3c059970e94b4db18ed2c446acda78875cee5de509dfd0e75899b4da9e0248"},
-    {"path": "patches/common/packages/007-tailscale-product-service.patch", "sha256": "85db86aa25e67f9d4de29be0aa8d37e8803731f826080d0edd76286440a400aa"},
+    {"path": "patches/common/packages/007-tailscale-product-service.patch", "sha256": "b0803d331c6111adc09b6142f61918e3972c9950ea354d30e7fa8ee297e9137b"},
     {"path": "patches/common/packages/008-tailscale-dependency-record.patch", "sha256": "1afbb93a1af5a8ede05f42a9e2e5dcf00c38678cfba6c44b1021eb9d4e0f0768"},
     {"path": "patches/common/packages/009-tailscale-self-key-expiry.patch", "sha256": "8860ca688139b2a506ad15655305cf161bf41d1d6dc85fe1856723057a3705a8"},
-    {"path": "patches/common/packages/010-tailscale-omit-peerapi.patch", "sha256": "25b041ec365588231bc1c98f47e77e6e235fc2ba91c651da8f3a46a3f4288067"},
+    {"path": "patches/common/packages/010-tailscale-omit-peerapi.patch", "sha256": "5cf2dd54caa270354f674c674b9f6ae8a0cedf8072641a8aa6a699be891f280c"},
+    {"path": "patches/common/packages/011-golang-1.26.11.patch", "sha256": "8bf572055bf46c47a6ccaad863a250e2c01b5e3fee0289be87d57d894817b01d"},
+    {"path": "patches/common/packages/012-ddns-scripts-https-providers.patch", "sha256": "11f79c29486762c55d975decb1a4028cf826ef022c17d797ecf9be4adc25b5bc"},
+    {"path": "patches/common/packages/013-ddns-scripts-cloudflare-zone-lookup.patch", "sha256": "829a3721e28bedfd0b454323bd8ce848f5e8a8b9fc5686a25d014b31fd24b0e6"},
+    {"path": "patches/common/packages/014-ddns-scripts-success-log.patch", "sha256": "ec5c4efdfe37f637ea1996868d46e652b5395c2618aa08cf15d1f1d981f0266a"},
     {"path": "patches/common/uboot/z09-bpirouter-env-reload.patch", "sha256": "be8f7eeafef9f36c03388990e2f6fd56f7946884ad11a2eb539619b0d49d18f1"},
     {"path": "patches/common/uboot/z10-bpirouter-en8811h-fw-nonfatal.patch", "sha256": "e16dabf8c5112d412728fe861daec981bb90dabb22be81a791581ef3351d08b1"},
     {"path": "patches/common/uboot/z11-bpirouter-ubi-find-volume-guard.patch", "sha256": "c47e65675ce953f2175e4ad16d89246b5a35ad77fc5fe31b80d495a1305ec458"},
@@ -241,14 +248,14 @@
 
   ],
   "configs": [
-    {"path": "config/blob-licences.json", "sha256": "097e5ddcd9b471c1d3febfed6ee3d3eb056dd41c51fb794afc13b289f5a1fe40"},
+    {"path": "config/blob-licences.json", "sha256": "10220acf3496f907590e62a281f7724cb313b08692e2ed97512f0c7a468da614"},
     {"path": "config/bpi-r3-mini.config", "sha256": "1c2fb68aeb70cc8e96d8e9336e0461d8deee4fd58896c84ed382837066ff49e0"},
     {"path": "config/bpi-r3.config", "sha256": "24b42bd3aea11cafee79ff645578295be19477a6f7d2f7ff0005007f82277361"},
     {"path": "config/bpi-r4-lite.config", "sha256": "5c52cb6590df0494b99e0d9fd8a45b91e16ffcc06f61208d27798a2d007f7a5c"},
     {"path": "config/bpi-r4-pro-4e.config", "sha256": "9f6ab109cee956df91fc4a71587915591e9036fc42498ac5b2ad5ce33f29fc40"},
     {"path": "config/bpi-r4-pro.config", "sha256": "29fdde2787a56ff7f52d1ff12da936dd847ddee5f4917cb1f45e40ac70db38cc"},
     {"path": "config/bpi-r4.config", "sha256": "ad2138c582998551f47b7343d23b1d7f4a0289d6df4454732a8e8047fa359787"},
-    {"path": "config/common.config", "sha256": "dcee17d6f54c0e86a5419bfc9b08ebc43b848740df3e904936534e4c280515c6"},
+    {"path": "config/common.config", "sha256": "1185c22e78525646431dea4678aeae0f21ecdfebe9b6aac4f9591339825070e5"},
     {"path": "config/download-decisions.json", "sha256": "3a0f821ac1951cedb8340ffd6973671fdc9b9e1fafcf30cd4890a7eb65d3e9b0"},
     {"path": "config/openwrt-one.config", "sha256": "dea8fae83589faa311b9390d6dfa4cc583697a73722d2af7785617c05d879276"}
   ]

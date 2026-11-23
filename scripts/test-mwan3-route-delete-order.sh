@@ -155,7 +155,7 @@ install_line=$(grep -nF './scripts/feeds install -a' "$PREPARE" | cut -d: -f1)
 	exit 1
 }
 
-for build in "$BUILD_DIR/scripts/build-full.sh" "$BUILD_DIR/scripts/build-image.sh"; do
+for build in "$BUILD_DIR/scripts/build-full.sh"; do
 	grep -Fq '"$SCRIPT_DIR/test-mwan3-route-delete-order.sh"' "$build" || {
 		echo "$(basename "$build") omits the mwan3 route-delete gate" >&2
 		exit 1

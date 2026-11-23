@@ -2,13 +2,13 @@
 # Copyright (C) 2026 Ning <mimallaus@gmail.com>
 # prepare.sh — Prepare OpenWrt build environment
 # Usage: ./scripts/prepare.sh [--board <board>]
-#        [--development | --release-lock <file>]
+#        [--release-lock <file>]
 #   --board: bpi-r4 (default), bpi-r4-lite, bpi-r4-pro, bpi-r3, bpi-r3-mini, openwrt-one
 set -eo pipefail
 
 # WSL: drop /mnt/c/* PATH entries — Windows paths with spaces break
 # OpenWrt's Makefile shell tokenization and trip GNU find -execdir's
-# relative-path safety check. See build-image.sh for the full story.
+# relative-path safety check.
 if grep -qi microsoft /proc/version 2>/dev/null; then
     PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/[a-zA-Z]/' | paste -sd: -)
     export PATH
@@ -31,7 +31,7 @@ ok()   { echo -e "${G}✓ $1${N}"; }
 warn() { echo -e "${Y}! $1${N}"; }
 fail() { echo -e "${R}✗ $1${N}"; exit 1; }
 
-source "$SCRIPT_DIR/lib/release-gate.sh"
+
 
 # ── Parse args ──
 #
@@ -41,50 +41,29 @@ source "$SCRIPT_DIR/lib/release-gate.sh"
 # missing files/ or, worse, packages whatever a previous build left behind.
 # Deciding it at prepare puts it where the tree records it.
 #
-# Exactly one mode, never inferred. Probing for ../bpirouter-ui would mean a
-# machine that happens to have a directory of that name silently builds a
-# different image from one that does not.
 BOARD="bpi-r4"
-UI_MODE=""; UI_SOURCE=""; UI_ARTIFACT=""
+UI_MODE=""; UI_ARTIFACT=""
 RELEASE_LOCK_ARG=""
-DEVELOPMENT=0
 set_mode() {
-    [ -z "$UI_MODE" ] || fail "UI mode already set to '$UI_MODE'; --ui-source, --ui-artifact and --without-proprietary-ui are mutually exclusive"
+    [ -z "$UI_MODE" ] || fail "UI mode already set to '$UI_MODE'; --ui-artifact and --without-proprietary-ui are mutually exclusive"
     UI_MODE="$1"
 }
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --board) BOARD="$2"; shift 2 ;;
         --board=*) BOARD="${1#*=}"; shift ;;
-        --ui-source)   set_mode source;   UI_SOURCE="$2"; shift 2 ;;
         --ui-artifact) set_mode artifact; UI_ARTIFACT="$2"; shift 2 ;;
         --without-proprietary-ui) set_mode none; shift ;;
-        --development)
-            [ "$DEVELOPMENT" = 0 ] || fail "--development was specified more than once"
-            DEVELOPMENT=1
-            shift
-            ;;
         --release-lock) RELEASE_LOCK_ARG="$2"; shift 2 ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
 [ -n "$UI_MODE" ] || fail "no UI mode given. Pass exactly one of:
-    --ui-source <dir>              build the UI from its source tree (needs a licence to it)
     --ui-artifact <apk>            stage a released UI package
     --without-proprietary-ui       build an image WITHOUT the BpiRouter UI and API
   This is required rather than defaulted: an image silently missing its
   management interface looks fine until it is flashed."
-[ "$DEVELOPMENT" = 0 ] || [ -z "$RELEASE_LOCK_ARG" ] \
-    || fail "--development and --release-lock are mutually exclusive"
-[ "$DEVELOPMENT" = 0 ] || [ "$UI_MODE" = source ] \
-    || fail "--development requires --ui-source"
-
 case "$UI_MODE" in
-    source)
-        [ -d "$UI_SOURCE" ] || fail "--ui-source: no such directory: $UI_SOURCE"
-        [ -x "$UI_SOURCE/deploy/build.sh" ] || fail "--ui-source: $UI_SOURCE has no deploy/build.sh"
-        UI_SOURCE="$(cd "$UI_SOURCE" && pwd)"
-        ;;
     artifact)
         [ -f "$UI_ARTIFACT" ] || fail "--ui-artifact: no such file: $UI_ARTIFACT"
         UI_ARTIFACT="$(cd "$(dirname "$UI_ARTIFACT")" && pwd)/$(basename "$UI_ARTIFACT")"
@@ -92,66 +71,15 @@ case "$UI_MODE" in
 esac
 
 # ── Which release lock describes this tree ──
-# A published tree carries it at the root; the internal workspace writes it under
-# dist/, one file per release.
-#
-# This used to end with a fixed dist/RELEASE-INPUTS.lock.json, which is not the
-# name make-release-lock.sh writes -- it writes dist/RELEASE-INPUTS.<release>.lock.json.
-# So a stale unversioned file from an earlier run shadowed every lock made since,
-# and the tree was checked against a revision from days before. It failed closed
-# that time. The dangerous direction is the same mistake passing.
-#
-# Resolve through the shared helper and check its status before using the path.
-LOCKF=""
-if [ "$DEVELOPMENT" = 1 ]; then
-    # An explicit development prepare must not be influenced by canonical locks
-    # left under dist/ or by a caller's BPIR_RELEASE_LOCK environment. It is
-    # intentionally unbound and cannot authorize release collection.
-    LOCKF=""
-else
-    LOCKF=$("$SCRIPT_DIR/lib/release-lock-contract.py" find-input --build-dir "$BUILD_DIR" \
-        --explicit "${RELEASE_LOCK_ARG:-${BPIR_RELEASE_LOCK:-}}") || fail "cannot select release lock"
-fi
+LOCKF=$("$SCRIPT_DIR/lib/release-lock-contract.py" find-input --build-dir "$BUILD_DIR" \
+    --explicit "${RELEASE_LOCK_ARG:-${BPIR_RELEASE_LOCK:-}}") || fail "cannot select release lock"
 find_lock() { echo "$LOCKF"; }
 
-# A source build without an explicit lock is a development build. It may still
-# be useful locally, but build-full deliberately emits no release provenance and
-# collect-release-artifacts refuses it. Formal source mode has to name the lock
-# on the command line; auto-discovering one would let a stale file silently turn
-# an ordinary build into a claimed release build.
-RELEASE_BOUND=0
-BOUND_LOCK=""
 UI_ARTIFACT_SHA=""
 UI_PAYLOAD_SHA=""
 UI_APID_SHA=""
 if [ -n "$RELEASE_LOCK_ARG" ]; then
-    EXPLICIT_SCOPE=tree
-    git -C "$BUILD_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-        && git -C "$(dirname "$BUILD_DIR")/bpirouter-ui" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-        && git -C "$(dirname "$BUILD_DIR")/bpirouter-feeds" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-        && EXPLICIT_SCOPE=workspace
-    [ "$UI_MODE" != source ] || [ "$EXPLICIT_SCOPE" = workspace ] \
-        || fail "release source mode requires the complete three-repository workspace"
-    if [ "$EXPLICIT_SCOPE" = workspace ]; then
-        bpir_require_release_workspace "$SCRIPT_DIR" "$BUILD_DIR" "$LOCKF" \
-            || fail "the executing prepare checkout does not match the explicit release lock"
-        RELEASE_BOUND=1
-        BOUND_LOCK="$LOCKF"
-    else
-        "$SCRIPT_DIR/check-release-lock.sh" --scope tree "$LOCKF" \
-            || fail "the explicit release lock does not describe the published build tree"
-        warn "published-tree prepare is reproducible but not release-collectable; formal provenance requires the locked three-repository workspace"
-    fi
-    if [ "$UI_MODE" = source ]; then
-        EXPECTED_UI=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["repos"]["bpirouter-ui"])' "$LOCKF")
-        ACTUAL_UI=$(git -C "$UI_SOURCE" rev-parse HEAD 2>/dev/null || true)
-        [ "$ACTUAL_UI" = "$EXPECTED_UI" ] \
-            || fail "--ui-source is at ${ACTUAL_UI:-no git commit}; release lock requires ${EXPECTED_UI:0:12}"
-        [ -z "$(git -C "$UI_SOURCE" status --porcelain 2>/dev/null)" ] \
-            || fail "--ui-source has uncommitted changes; release source must exactly match the lock"
-    fi
-elif [ "$UI_MODE" = source ]; then
-    warn "source mode has no explicit --release-lock; this is a development-only prepare and cannot be collected as a release"
+    "$SCRIPT_DIR/check-release-lock.sh" --scope tree "$LOCKF" || exit 1
 fi
 
 source "$SCRIPT_DIR/boards.sh"
@@ -167,7 +95,7 @@ board_init "$BOARD"
 # instead of surfacing later as an absent config or an empty file contract.
 [ "$BOARD_IMPLEMENTED" = yes ] || fail "board $BOARD is a frozen identity without build admission yet; source inputs alone do not satisfy the build gate"
 case " $PLANNED_BOARDS " in
-    *" $BOARD "*) [ "$DEVELOPMENT" = 1 ] || fail "board $BOARD has a frozen identity; this board requires explicit --development" ;;
+    *" $BOARD "*) fail "board $BOARD is not admitted by the selected release" ;;
 esac
 
 # ── Refuse a board this tree cannot finish ──
@@ -232,15 +160,7 @@ rm -f "$MARKER"
 if [ "$WORK_DIR_EXISTS" = 1 ]; then
     bpir_is_exact_openwrt_worktree "$WORK_DIR" \
         || fail "OpenWrt checkout root changed before reset: $WORK_DIR"
-    if [ "$UI_MODE" = source ] && [ -z "$RELEASE_LOCK_ARG" ]; then
-        step "OpenWrt exists — synchronizing to $BPIR_OPENWRT_GIT_REF before re-patching"
-        bpir_sync_openwrt_development_source "$WORK_DIR" \
-            || fail "cannot synchronize OpenWrt to $BPIR_OPENWRT_GIT_REF ($BPIR_OPENWRT_GIT_COMMIT)"
-    else
-        step "OpenWrt exists — resetting tracked source to pristine before re-patching"
-        bpir_reset_openwrt_source "$WORK_DIR" \
-            || fail "cannot reset OpenWrt source to pristine HEAD"
-    fi
+    bpir_reset_openwrt_source "$WORK_DIR" || fail "cannot reset OpenWrt source"
     # Re-apply patches idempotently: base-files patches use `git apply`, which is
     # NOT idempotent across runs (an updated patch fails --check against an
     # already-patched tree and gets silently skipped). Revert tracked source to
@@ -477,25 +397,7 @@ if [ -f "$CONFIG_FILE" ]; then
         # describes this tree supplies hashes for a different release, and
         # accepting it here would give the customer build a weaker standard
         # than the one we hold ourselves to.
-        # Scope follows what this checkout can actually show. A published tree
-        # has no sibling repositories -- bpirouter-ui is proprietary and is not
-        # in it at all -- so demanding the workspace scope there would make
-        # artifact builds impossible rather than safe.
-        LOCK_SCOPE=tree
-        git -C "$BUILD_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-            && git -C "$(dirname "$BUILD_DIR")/bpirouter-ui" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-            && git -C "$(dirname "$BUILD_DIR")/bpirouter-feeds" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-            && LOCK_SCOPE=workspace
-        if [ "$LOCK_SCOPE" = workspace ]; then
-            bpir_require_release_workspace "$SCRIPT_DIR" "$BUILD_DIR" "$LOCKF" \
-                || fail "the executing prepare checkout does not match the artifact release lock"
-            RELEASE_BOUND=1
-            BOUND_LOCK="$LOCKF"
-        else
-            "$SCRIPT_DIR/check-release-lock.sh" --scope tree "$LOCKF" \
-                || fail "the release lock does not describe this published tree; artifact mode needs a matching lock"
-            warn "artifact staged from a published tree; this build is reproducible but cannot produce formal release provenance"
-        fi
+        "$SCRIPT_DIR/check-release-lock.sh" --scope tree "$LOCKF" || exit 1
         # Freeze the exact package bytes consumed by staging. The caller's path
         # may be replaced concurrently; hashing it again later could otherwise
         # bind the marker to different bytes than apk actually extracted.
@@ -527,20 +429,6 @@ rm -f "$WORK_DIR/target/linux/mediatek/base-files/etc/uci-defaults/99_fwenv-stor
 # `none` would reuse a .config that still selects the UI, and the mismatch would
 # only show up in the finished image. The artifact hash is included so a tree
 # prepared for one release's UI is not silently reused for another's.
-TREE_SHA=""
-PREPARE_INPUT_SHA=""
-LOCK_METADATA=""
-if [ "$RELEASE_BOUND" = 1 ]; then
-    # Repeat at the END of prepare. A hook or feed operation that dirtied one of
-    # the three repositories after the first check must not be blessed by the
-    # marker. The prepared-tree digest separately binds the patched OpenWrt tree.
-    bpir_require_release_workspace "$SCRIPT_DIR" "$BUILD_DIR" "$BOUND_LOCK" \
-        || fail "release workspace or executing prepare checkout drifted while preparing"
-    TREE_SHA=$("$SCRIPT_DIR/release-build-provenance.py" prepared-id --work-dir "$WORK_DIR")
-    LOCK_METADATA=$("$SCRIPT_DIR/release-build-provenance.py" lock-metadata --lock "$BOUND_LOCK" --board "$BOARD")
-elif [ "$DEVELOPMENT" = 1 ]; then
-    TREE_SHA=$("$SCRIPT_DIR/release-build-provenance.py" prepared-id --work-dir "$WORK_DIR")
-fi
 PREPARE_INPUT_SHA=$("$SCRIPT_DIR/release-build-provenance.py" prepare-input-id \
     --build-dir "$BUILD_DIR" --board "$BOARD")
 
@@ -550,19 +438,9 @@ PREPARE_INPUT_SHA=$("$SCRIPT_DIR/release-build-provenance.py" prepare-input-id \
     [ "$UI_MODE" = artifact ] && echo "ui_artifact_sha256=$UI_ARTIFACT_SHA"
     [ "$UI_MODE" = artifact ] && echo "ui_payload_sha256=$UI_PAYLOAD_SHA"
     [ "$UI_MODE" = artifact ] && echo "ui_apid_sha256=$UI_APID_SHA"
-    [ "$UI_MODE" = source ]   && echo "ui_source=$UI_SOURCE"
-    echo "release_bound=$RELEASE_BOUND"
-    echo "development_bound=$DEVELOPMENT"
+    echo "release_bound=0"
+    echo "development_bound=0"
     [ -z "$LOCKF" ] || echo "input_lock_path=$LOCKF"
-    if [ "$RELEASE_BOUND" = 1 ]; then
-        printf '%s\n' "$LOCK_METADATA" | while IFS= read -r line; do
-            case "$line" in
-                release=*) echo "release_id=${line#release=}" ;;
-                *) echo "$line" ;;
-            esac
-        done
-    fi
-    [ -z "$TREE_SHA" ] || echo "prepared_tree_sha256=$TREE_SHA"
     echo "prepare_inputs_sha256=$PREPARE_INPUT_SHA"
     true
 } > "$MARKER"

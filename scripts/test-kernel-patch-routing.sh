@@ -21,7 +21,7 @@ esac
 # optional --require-indexed pre-commit mode additionally proves that the same
 # migration plus combo-LAN runtime files are in Git's index instead of merely
 # surviving as local untracked files.
-# The two series counts are part of the pinned OpenWrt 25.12.5 / 93cf01b0 import
+# The two series counts are part of the 93cf01b0 import vendored on OpenWrt 25.12.5
 # documented by MXL862XX-UPSTREAM.md.
 shopt -s nullglob
 backport_patches=("$R4_PRO_KERNEL_DIR"/930-*.patch)

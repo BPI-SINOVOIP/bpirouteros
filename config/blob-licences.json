@@ -44,8 +44,7 @@
         "licence with it, with its source and hash recorded in the release lock.",
         "",
         "The licence does not affirmatively enumerate which forms are permitted --",
-        "it excludes. This entry records what we do and why; the wording used in a",
-        "public release is for legal review."
+        "it excludes. This entry records what we do and why."
       ],
       "date": "2026-08-05"
     }

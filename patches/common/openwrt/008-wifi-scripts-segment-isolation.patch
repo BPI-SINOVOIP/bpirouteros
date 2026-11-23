@@ -1,0 +1,33 @@
+Apply the managed segment's client isolation to its bridge ports as well
+as its APs. Derive it when reading wireless configuration so existing
+guest and IoT settings take effect on first boot after an upgrade.
+
+diff --git a/package/network/config/wifi-scripts/Makefile b/package/network/config/wifi-scripts/Makefile
+--- a/package/network/config/wifi-scripts/Makefile
++++ b/package/network/config/wifi-scripts/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=wifi-scripts
+ PKG_VERSION:=1.0
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ PKG_LICENSE:=GPL-2.0
+ 
+ PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+diff --git a/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc b/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc
+--- a/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc
++++ b/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc
+@@ -179,6 +179,13 @@ function config_init(uci)
+ 				continue;
+ 
+ 			let config = parse_attribute_list(data, handler.iface);
++			// Managed segment APs share a bridge across radios.
++			let network = length(config.network) == 1 ? config.network[0] : null;
++			if (data.bpir_managed == "1" && config.mode == "ap" && config.isolate &&
++			    (network == "bpir_guest" || network == "bpir_iot") &&
++			    name == network + "_" + dev_name)
++				config.bridge_isolate = true;
++
+ 			config.radios = radios;
+ 
+ 			if (mlo_vif && !mlo_created) {

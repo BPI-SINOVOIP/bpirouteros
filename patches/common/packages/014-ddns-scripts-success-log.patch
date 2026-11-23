@@ -1,0 +1,20 @@
+diff --git a/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh b/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh
+--- a/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh
++++ b/net/ddns-scripts/files/usr/lib/ddns/dynamic_dns_updater.sh
+@@ -347,9 +347,13 @@ while : ; do
+ 		if [ $ERR_LAST -eq 0 ]; then
+ 			get_uptime LAST_TIME		# we send update, so
+ 			echo $LAST_TIME > $UPDFILE	# save LASTTIME to file
+-			[ "$CURRENT_IP" != "$REGISTERED_IP" ] \
+-				&& write_log 6 "Update successful - IP '$CURRENT_IP' send" \
+-				|| write_log 6 "Forced update successful - IP: '$CURRENT_IP' send"
++			# BpiRouter: if/else, not && ||: write_log returns non-zero when the
++			# message is not sent to syslog, which logged both lines.
++			if [ "$CURRENT_IP" != "$REGISTERED_IP" ]; then
++				write_log 6 "Update successful - IP '$CURRENT_IP' send"
++			else
++				write_log 6 "Forced update successful - IP: '$CURRENT_IP' send"
++			fi
+ 		elif [ $ERR_LAST -eq 127 ]; then
+ 			write_log 3 "No update send to DDNS Provider"
+ 		else

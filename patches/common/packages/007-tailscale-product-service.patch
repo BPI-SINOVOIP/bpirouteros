@@ -85,14 +85,3 @@ diff --git a/net/tailscale/files/tailscale.init b/net/tailscale/files/tailscale.
 +service_stopped() {
 +  TS_NO_LOGS_NO_SUPPORT=true /usr/sbin/tailscaled --cleanup >/dev/null 2>&1
 +}
-diff --git a/net/tailscale/Makefile b/net/tailscale/Makefile
---- a/net/tailscale/Makefile
-+++ b/net/tailscale/Makefile
-@@ -10,6 +10,6 @@
- PKG_NAME:=tailscale
- PKG_VERSION:=1.98.3
--PKG_RELEASE:=1
-+PKG_RELEASE:=2
- 
- PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
- PKG_SOURCE_URL:=https://codeload.github.com/tailscale/tailscale/tar.gz/v$(PKG_VERSION)?

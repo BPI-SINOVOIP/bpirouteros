@@ -1,0 +1,50 @@
+diff --git a/net/ddns-scripts/files/usr/lib/ddns/update_cloudflare_com_v4.sh b/net/ddns-scripts/files/usr/lib/ddns/update_cloudflare_com_v4.sh
+--- a/net/ddns-scripts/files/usr/lib/ddns/update_cloudflare_com_v4.sh
++++ b/net/ddns-scripts/files/usr/lib/ddns/update_cloudflare_com_v4.sh
+@@ -67,6 +67,7 @@ fi
+ # used variables
+ local __HOST __DOMAIN __TYPE __URLBASE __PRGBASE __RUNPROG __DATA __IPV6 __ZONEID __RECID
+ local __URLBASE="https://api.cloudflare.com/client/v4"
++local __WALK_ZONE=0
+ 
+ if echo "$domain" | grep -Fq '@'; then
+ 	# split __HOST __DOMAIN from $domain
+@@ -77,6 +78,9 @@ if echo "$domain" | grep -Fq '@'; then
+ 	__DOMAIN=$(printf %s "$domain" | cut -d@ -f2)
+ else
+ 	__DOMAIN=$domain
++	# BpiRouter: a plain record name such as home.example.com does not say
++	# which part is the zone; the zone lookup below walks up its labels.
++	__WALK_ZONE=1
+ fi
+ 
+ # Cloudflare v4 needs:
+@@ -179,8 +183,26 @@ fi
+ __PRGBASE="$__PRGBASE --header 'Content-Type: application/json' "
+ 
+ # read zone id for registered domain.TLD
+-__RUNPROG="$__PRGBASE --request GET '$__URLBASE/zones?name=$__DOMAIN'"
+-cloudflare_transfer || return 1
++# BpiRouter: without '@' try the full record name first, then each parent
++# name down to two labels, and stop at the first zone the credentials can
++# see (the most specific one). With '@' the zone is used exactly as given.
++while : ; do
++	__RUNPROG="$__PRGBASE --request GET '$__URLBASE/zones?name=$__DOMAIN'"
++	cloudflare_transfer || return 1
++	[ $__WALK_ZONE -eq 1 ] || break
++	if [ -n "$zone_id" ]; then
++		[ -n "$(jsonfilter -i $DATFILE -e "@.result[@.id='$zone_id'].id")" ] && break
++	else
++		[ -n "$(jsonfilter -i $DATFILE -e "@.result.*.id" | head -1)" ] && break
++	fi
++	case "$__DOMAIN" in
++		*.*.*)
++			write_log 7 "No zone named '$__DOMAIN'; trying '${__DOMAIN#*.}'"
++			__DOMAIN=${__DOMAIN#*.}
++			;;
++		*) break ;;
++	esac
++done
+ 
+ if [ -n "$zone_id" ]; then
+ 	# validate user defined zone id

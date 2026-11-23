@@ -34,8 +34,13 @@ for radio in $(uci show wireless 2>/dev/null | grep '=wifi-device' | cut -d= -f1
     # Do not guess the deployment country. Until the operator selects one,
     # leaving it unset keeps the kernel on its conservative world domain.
     uci -q delete wireless.${radio}.country
-    uci set wireless.${radio}.disabled='0'
-    uci set ${section}.disabled='0'
+    # SYS-45: no radio transmits until the setup wizard sets the owner's own
+    # password. A shared factory key would let anyone in range join before the
+    # owner and, with root still passwordless, take the router over. First
+    # setup is wired; the wizard (or the Wi-Fi page) turns the radios on.
+    uci set wireless.${radio}.disabled='1'
+    uci set ${section}.disabled='1'
+    uci -q delete ${section}.key
 
     case "$band" in
         6g|6ghz)
@@ -47,24 +52,19 @@ for radio in $(uci show wireless 2>/dev/null | grep '=wifi-device' | cut -d= -f1
             # A country string is not proof that this kernel/regdb combination
             # permits AP initiation there. The product enables 6 GHz only after
             # the authenticated runtime capability check succeeds.
-            uci set wireless.${radio}.disabled='1'
-            uci set ${section}.disabled='1'
             # 6GHz strictly requires pure WPA3-SAE; mixed mode is prohibited
             uci set ${section}.ssid="BpiRouter_6G_${MAC_SUFFIX}"
             uci set ${section}.encryption='sae'
-            uci set ${section}.key='bpirouter'
             uci set ${section}.ieee80211w='2'
             ;;
         5g|5ghz)
             uci set ${section}.ssid="BpiRouter_5G_${MAC_SUFFIX}"
             uci set ${section}.encryption='sae-mixed'
-            uci set ${section}.key='bpirouter'
             uci set ${section}.ieee80211w='1'
             ;;
         2g|2ghz)
             uci set ${section}.ssid="BpiRouter_2.4G_${MAC_SUFFIX}"
             uci set ${section}.encryption='sae-mixed'
-            uci set ${section}.key='bpirouter'
             uci set ${section}.ieee80211w='1'
             ;;
     esac

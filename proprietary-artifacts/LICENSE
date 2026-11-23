@@ -16,7 +16,8 @@ under the GNU General Public License and other free software licences.
 This application is an independent program, not a derivative of them:
 
   - the backend is built with CGO_ENABLED=0 and links no C library;
-  - its only dependencies are golang-jwt/jwt (MIT) and tredoe/osutil (MPL-2.0);
+  - its only dependencies are golang-jwt/jwt (MIT) and the user/crypt packages
+    of tredoe/osutil (BSD-2-Clause);
   - it interacts with the system by executing separate programs (uci, ubus and
     other command-line tools), never by linking into them or being loaded into
     their address space.
@@ -33,14 +34,14 @@ recipient may do with the GPL-covered parts of the firmware.
 2. WHAT THIS LICENCE DOES NOT COVER
 
   - the OpenWrt sources, feeds and package recipes;
-  - the patches to Linux, U-Boot, ARM Trusted Firmware and OpenWrt in
-    bpirouter-build/patches/;
-  - the build and installation scripts and board configuration in
-    bpirouter-build/;
+  - the patches to Linux, U-Boot, ARM Trusted Firmware and OpenWrt in the
+    BpiRouter build sources;
+  - the build and installation scripts and board configuration in the
+    BpiRouter build sources;
   - the firmware images themselves, to the extent they contain the above.
 
-Each of those carries its own licence. See the LICENSING.md files in
-bpirouter-build and bpirouter-feeds.
+Each of those carries its own licence. See the LICENSING.md files of the
+BpiRouter build sources and of the BpiRouter package feed.
 
 
 3. PERMITTED USE

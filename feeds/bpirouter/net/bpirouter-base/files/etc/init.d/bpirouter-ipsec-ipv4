@@ -1,0 +1,21 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2026 Ning <mimallaus@gmail.com>
+# Restrict OpenWrt's stock IPsec forward rules to IPv4 (KI-10); see the helper.
+# After the OTA config restore (10) and generation recovery (11), before the
+# firewall (19). Boot only, and it never fails a start: the worst case is a
+# board that keeps the rules it booted with.
+START=12
+
+PROG=${BPIR_IPSEC_IPV4_PROG:-/usr/libexec/bpirouter-ipsec-ipv4}
+
+boot() {
+	"$PROG" || true
+}
+
+start() {
+	return 0
+}
+
+stop() {
+	return 0
+}
